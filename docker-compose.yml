@@ -1,0 +1,136 @@
+version: "3.8"
+
+services:
+  # ============================================================================
+  # Operational Database: PostgreSQL 16 with pgvector extension
+  # ============================================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: opswingman-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-opswingman}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-opswingman}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # In-memory Cache & Queue: Valkey
+  # ============================================================================
+  valkey:
+    image: valkey/valkey:7.2
+    container_name: opswingman-valkey
+    restart: unless-stopped
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # Local Email Capture: Mailpit
+  # ============================================================================
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: opswingman-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025" # SMTP port
+      - "${MAILPIT_UI_PORT:-8025}:8025"   # Web UI
+    volumes:
+      - mailpit_data:/data
+
+  # ============================================================================
+  # Agent Observability & Tracing: Self-hosted Langfuse
+  # ============================================================================
+  langfuse-db:
+    image: postgres:16
+    container_name: opswingman-langfuse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LANGFUSE_DB_USER:-langfuse}
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse}
+      POSTGRES_DB: ${LANGFUSE_DB_NAME:-langfuse}
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LANGFUSE_DB_USER:-langfuse} -d ${LANGFUSE_DB_NAME:-langfuse}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: opswingman-langfuse
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://${LANGFUSE_DB_USER:-langfuse}:${LANGFUSE_DB_PASSWORD:-langfuse}@langfuse-db:5432/${LANGFUSE_DB_NAME:-langfuse}
+      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-changeme-local-nextauth-secret-32-chars-min}
+      SALT: ${LANGFUSE_SALT:-changeme-local-salt-32-chars-minimum}
+      TELEMETRY_ENABLED: "false"
+
+  # ============================================================================
+  # Application Services (Optional / Dev profile)
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: opswingman-backend
+    restart: unless-stopped
+    profiles: ["app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+      - ./database:/app/database
+      - ./simulator:/app/simulator
+      - ./workers:/app/workers
+      - ./integrations:/app/integrations
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: opswingman-frontend
+    restart: unless-stopped
+    profiles: ["app"]
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+  valkey_data:
+  mailpit_data:
+  langfuse_db_data:

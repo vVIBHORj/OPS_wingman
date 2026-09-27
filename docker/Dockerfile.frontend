@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=development
+ENV PORT=3000
+
+# Copy package manifests
+COPY frontend/package.json frontend/package-lock.json* /app/
+
+# Install dependencies
+RUN npm install
+
+# Copy frontend source files
+COPY frontend /app
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]
