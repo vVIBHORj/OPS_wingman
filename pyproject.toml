@@ -9,8 +9,17 @@ authors = [
 ]
 
 [tool.pyright]
+include = [
+    "backend",
+    "simulator",
+    "database",
+    "integrations",
+    "workers",
+    "tests",
+    "scripts",
+    "evals"
+]
 extraPaths = [
-    "..",
     "."
 ]
 pythonVersion = "3.12"

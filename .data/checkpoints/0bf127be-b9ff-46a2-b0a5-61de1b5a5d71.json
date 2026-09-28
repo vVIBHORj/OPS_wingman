@@ -1,0 +1,147 @@
+{
+  "workflow_id": "70affa67-a4af-4457-972d-3561b2056483",
+  "run_id": "0bf127be-b9ff-46a2-b0a5-61de1b5a5d71",
+  "workflow_type": "order_operations",
+  "state": "COMPLETED",
+  "customer_id": "11111111-1111-4111-8111-111111111111",
+  "order_id": "9245a279-8039-41c4-9554-88cb36f6d6e9",
+  "event_id": null,
+  "input_text": "Please track my shipment for order ORD-20260928-B9AA0C, where is it?",
+  "intent": "track_shipment",
+  "extracted_entities": {
+    "order_number": "ORD-20260928-B9AA0C"
+  },
+  "steps": [
+    {
+      "step_id": "1dc0bca4",
+      "step_name": "interpret_request",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": {
+        "input_text": "Please track my shipment for order ORD-20260928-B9AA0C, where is it?"
+      },
+      "output_payload": {
+        "intent": "track_shipment",
+        "extracted_entities": {
+          "order_number": "ORD-20260928-B9AA0C"
+        }
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:36:30.458663Z"
+    },
+    {
+      "step_id": "dfda0eb0",
+      "step_name": "plan_tools",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "planned_tools": [
+          "get_order",
+          "get_shipment"
+        ],
+        "proposed_actions": []
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:36:30.459907Z"
+    },
+    {
+      "step_id": "712ef393",
+      "step_name": "execute_tool_get_order",
+      "state": "RUNNING",
+      "tool_name": "get_order",
+      "input_payload": {
+        "order_number": "ORD-20260928-B9AA0C"
+      },
+      "output_payload": {
+        "success": true,
+        "data": {
+          "id": "9245a279-8039-41c4-9554-88cb36f6d6e9",
+          "order_number": "ORD-20260928-B9AA0C",
+          "customer_id": "11111111-1111-4111-8111-111111111111",
+          "status": "SHIPPED",
+          "subtotal_amount": "4999.00",
+          "tax_amount": "899.82",
+          "shipping_amount": "0.00",
+          "total_amount": "5898.82",
+          "currency": "INR",
+          "cancellation_reason": null,
+          "created_at": "2026-09-28T06:36:30.431433",
+          "items": [
+            {
+              "id": "aec012d9-90bf-4cf1-abe1-51b30143079d",
+              "product_id": "22222222-2222-4222-8222-222222222222",
+              "quantity": 1,
+              "unit_price": "4999.00",
+              "total_price": "4999.00"
+            }
+          ]
+        },
+        "error": null,
+        "tool_name": "get_order",
+        "risk_level": "LOW"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:36:30.513286Z"
+    },
+    {
+      "step_id": "d3acdf14",
+      "step_name": "execute_tool_get_shipment",
+      "state": "RUNNING",
+      "tool_name": "get_shipment",
+      "input_payload": {
+        "order_id": "9245a279-8039-41c4-9554-88cb36f6d6e9"
+      },
+      "output_payload": {
+        "success": true,
+        "data": {
+          "id": "e3ffad29-ae90-4f1f-a547-9f4555dc2972",
+          "shipment_number": "SHP-DEL-20260928-236062",
+          "order_id": "9245a279-8039-41c4-9554-88cb36f6d6e9",
+          "carrier": "Delhivery",
+          "tracking_number": "DELCFBB343EDIN",
+          "status": "IN_TRANSIT",
+          "estimated_delivery_date": "2026-10-01T06:36:30.443164",
+          "actual_delivery_date": null,
+          "current_location": "Pune Hub",
+          "delay_reason": null
+        },
+        "error": null,
+        "tool_name": "get_shipment",
+        "risk_level": "LOW"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:36:30.516285Z"
+    },
+    {
+      "step_id": "43b1a15b",
+      "step_name": "evaluate_policy",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "requires_approval": false,
+        "workflow_state": "RUNNING"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:36:30.518050Z"
+    },
+    {
+      "step_id": "836c6945",
+      "step_name": "synthesize_response",
+      "state": "COMPLETED",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "final_response": "Order ORD-20260928-B9AA0C is currently in SHIPPED state (Total: INR 5898.82). Shipment (Delhivery, Tracking #DELCFBB343EDIN) is IN_TRANSIT. Current location: Pune Hub."
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:36:30.519440Z"
+    }
+  ],
+  "proposed_actions": [],
+  "final_response": "Order ORD-20260928-B9AA0C is currently in SHIPPED state (Total: INR 5898.82). Shipment (Delhivery, Tracking #DELCFBB343EDIN) is IN_TRANSIT. Current location: Pune Hub.",
+  "error": null,
+  "created_at": "2026-09-28T06:36:30.456392Z",
+  "updated_at": "2026-09-28T06:36:30.520451Z"
+}

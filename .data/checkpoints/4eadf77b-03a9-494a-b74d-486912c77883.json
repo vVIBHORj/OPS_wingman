@@ -1,0 +1,136 @@
+{
+  "workflow_id": "bf2398b2-3046-4e55-9c74-469cb7750e1b",
+  "run_id": "4eadf77b-03a9-494a-b74d-486912c77883",
+  "workflow_type": "order_operations",
+  "state": "COMPLETED",
+  "customer_id": "11111111-1111-4111-8111-111111111111",
+  "order_id": "6dc4d6ef-2392-4489-9b0d-8d23764b9956",
+  "event_id": null,
+  "input_text": "Can you check the status of ORD-20260928-09E399?",
+  "intent": "check_order_status",
+  "extracted_entities": {
+    "order_number": "ORD-20260928-09E399"
+  },
+  "steps": [
+    {
+      "step_id": "4d02aff4",
+      "step_name": "interpret_request",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": {
+        "input_text": "Can you check the status of ORD-20260928-09E399?"
+      },
+      "output_payload": {
+        "intent": "check_order_status",
+        "extracted_entities": {
+          "order_number": "ORD-20260928-09E399"
+        }
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:25:42.449419Z"
+    },
+    {
+      "step_id": "c4bb69a8",
+      "step_name": "plan_tools",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "planned_tools": [
+          "get_order",
+          "get_shipment"
+        ],
+        "proposed_actions": []
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:25:42.450923Z"
+    },
+    {
+      "step_id": "6992b73e",
+      "step_name": "execute_tool_get_order",
+      "state": "RUNNING",
+      "tool_name": "get_order",
+      "input_payload": {
+        "order_number": "ORD-20260928-09E399"
+      },
+      "output_payload": {
+        "success": true,
+        "data": {
+          "id": "6dc4d6ef-2392-4489-9b0d-8d23764b9956",
+          "order_number": "ORD-20260928-09E399",
+          "customer_id": "11111111-1111-4111-8111-111111111111",
+          "status": "PENDING",
+          "subtotal_amount": "1999.00",
+          "tax_amount": "359.82",
+          "shipping_amount": "0.00",
+          "total_amount": "2358.82",
+          "currency": "INR",
+          "cancellation_reason": null,
+          "created_at": "2026-09-28T06:25:42.429488",
+          "items": [
+            {
+              "id": "2e6edf8f-e488-4100-b562-6ec70e36e5e4",
+              "product_id": "22222222-2222-4222-8222-222222222222",
+              "quantity": 1,
+              "unit_price": "1999.00",
+              "total_price": "1999.00"
+            }
+          ]
+        },
+        "error": null,
+        "tool_name": "get_order",
+        "risk_level": "LOW"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:25:42.457187Z"
+    },
+    {
+      "step_id": "394398e2",
+      "step_name": "execute_tool_get_shipment",
+      "state": "RUNNING",
+      "tool_name": "get_shipment",
+      "input_payload": {
+        "order_id": "6dc4d6ef-2392-4489-9b0d-8d23764b9956"
+      },
+      "output_payload": {
+        "success": false,
+        "data": null,
+        "error": "Shipment for order 6dc4d6ef-2392-4489-9b0d-8d23764b9956 not found.",
+        "tool_name": "get_shipment",
+        "risk_level": "LOW"
+      },
+      "error": "Shipment for order 6dc4d6ef-2392-4489-9b0d-8d23764b9956 not found.",
+      "timestamp": "2026-09-28T06:25:42.458699Z"
+    },
+    {
+      "step_id": "d1ae0e49",
+      "step_name": "evaluate_policy",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "requires_approval": false,
+        "workflow_state": "RUNNING"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:25:42.459725Z"
+    },
+    {
+      "step_id": "eb916041",
+      "step_name": "synthesize_response",
+      "state": "COMPLETED",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "final_response": "Order ORD-20260928-09E399 is currently in PENDING state (Total: INR 2358.82)."
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:25:42.462239Z"
+    }
+  ],
+  "proposed_actions": [],
+  "final_response": "Order ORD-20260928-09E399 is currently in PENDING state (Total: INR 2358.82).",
+  "error": null,
+  "created_at": "2026-09-28T06:25:42.446444Z",
+  "updated_at": "2026-09-28T06:25:42.463239Z"
+}

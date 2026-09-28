@@ -1,0 +1,163 @@
+{
+  "workflow_id": "1896a212-4697-406e-b163-f1b662e2fb53",
+  "run_id": "31952058-953b-435e-98bc-9086fe6256fc",
+  "workflow_type": "order_operations",
+  "state": "WAITING_FOR_APPROVAL",
+  "customer_id": "11111111-1111-4111-8111-111111111111",
+  "order_id": "1a4be30a-8481-44f3-affe-1595f1a54db8",
+  "event_id": null,
+  "input_text": "I want to cancel my order ORD-20260928-C66669 please.",
+  "intent": "cancel_order_request",
+  "extracted_entities": {
+    "order_number": "ORD-20260928-C66669"
+  },
+  "steps": [
+    {
+      "step_id": "3332ed16",
+      "step_name": "interpret_request",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": {
+        "input_text": "I want to cancel my order ORD-20260928-C66669 please."
+      },
+      "output_payload": {
+        "intent": "cancel_order_request",
+        "extracted_entities": {
+          "order_number": "ORD-20260928-C66669"
+        }
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:38:48.229273Z"
+    },
+    {
+      "step_id": "b121e8a2",
+      "step_name": "plan_tools",
+      "state": "RUNNING",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "planned_tools": [
+          "get_order",
+          "get_policy"
+        ],
+        "proposed_actions": [
+          {
+            "action": "cancel_order",
+            "parameters": {
+              "order_number": "ORD-20260928-C66669",
+              "reason": "Customer cancellation request"
+            },
+            "reason": "Customer explicitly requested order cancellation",
+            "risk": "HIGH",
+            "requires_approval": true
+          }
+        ]
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:38:48.230272Z"
+    },
+    {
+      "step_id": "07b4d8af",
+      "step_name": "execute_tool_get_order",
+      "state": "RUNNING",
+      "tool_name": "get_order",
+      "input_payload": {
+        "order_number": "ORD-20260928-C66669"
+      },
+      "output_payload": {
+        "success": true,
+        "data": {
+          "id": "1a4be30a-8481-44f3-affe-1595f1a54db8",
+          "order_number": "ORD-20260928-C66669",
+          "customer_id": "11111111-1111-4111-8111-111111111111",
+          "status": "PENDING",
+          "subtotal_amount": "4999.00",
+          "tax_amount": "899.82",
+          "shipping_amount": "0.00",
+          "total_amount": "5898.82",
+          "currency": "INR",
+          "cancellation_reason": null,
+          "created_at": "2026-09-28T06:38:48.211727",
+          "items": [
+            {
+              "id": "ce948edd-c453-434c-89d2-74e4c2d425fb",
+              "product_id": "22222222-2222-4222-8222-222222222222",
+              "quantity": 1,
+              "unit_price": "4999.00",
+              "total_price": "4999.00"
+            }
+          ]
+        },
+        "error": null,
+        "tool_name": "get_order",
+        "risk_level": "LOW"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:38:48.235785Z"
+    },
+    {
+      "step_id": "e8d87852",
+      "step_name": "execute_tool_get_policy",
+      "state": "RUNNING",
+      "tool_name": "get_policy",
+      "input_payload": {
+        "policy_name": "cancellation_window"
+      },
+      "output_payload": {
+        "success": true,
+        "data": {
+          "policy_name": "cancellation_window",
+          "rule": "Orders can only be cancelled while in PENDING or CONFIRMED state. Once SHIPPED or IN_TRANSIT, cancellation is disallowed and a return must be initiated after delivery.",
+          "auto_approval_allowed": false,
+          "risk_level": "HIGH"
+        },
+        "error": null,
+        "tool_name": "get_policy",
+        "risk_level": "LOW"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:38:48.237289Z"
+    },
+    {
+      "step_id": "8179eb58",
+      "step_name": "evaluate_policy",
+      "state": "WAITING_FOR_APPROVAL",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "requires_approval": true,
+        "workflow_state": "WAITING_FOR_APPROVAL"
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:38:48.239294Z"
+    },
+    {
+      "step_id": "29f55197",
+      "step_name": "synthesize_response",
+      "state": "WAITING_FOR_APPROVAL",
+      "tool_name": null,
+      "input_payload": null,
+      "output_payload": {
+        "final_response": "Your cancellation request for order ORD-20260928-C66669 (Status: PENDING) has been initiated and submitted to our operations team for approval (Risk: HIGH)."
+      },
+      "error": null,
+      "timestamp": "2026-09-28T06:38:48.240295Z"
+    }
+  ],
+  "proposed_actions": [
+    {
+      "action": "cancel_order",
+      "parameters": {
+        "order_number": "ORD-20260928-C66669",
+        "reason": "Customer cancellation request"
+      },
+      "reason": "Customer explicitly requested order cancellation",
+      "risk": "HIGH",
+      "requires_approval": true
+    }
+  ],
+  "final_response": "Your cancellation request for order ORD-20260928-C66669 (Status: PENDING) has been initiated and submitted to our operations team for approval (Risk: HIGH).",
+  "error": null,
+  "created_at": "2026-09-28T06:38:48.226266Z",
+  "updated_at": "2026-09-28T06:38:48.241802Z"
+}

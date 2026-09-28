@@ -9,12 +9,12 @@ client = TestClient(app)
 
 
 def test_root_endpoint():
-    """Verify that root endpoint responds with Phase 0 status."""
+    """Verify that root endpoint responds with Phase status."""
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "OpsWingman API"
-    assert "Phase 0" in data["phase"]
+    assert "Phase 1" in data["phase"]
     assert data["status"] == "operational"
 
 
