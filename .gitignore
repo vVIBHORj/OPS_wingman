@@ -81,3 +81,5 @@ evals/reports/*.json
 playwright-report/
 test-results/
 .data/
+
+OpsWingman_Project_Master_Blueprint.docx
