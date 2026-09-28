@@ -80,3 +80,4 @@ evals/reports/*.json
 !evals/reports/.gitkeep
 playwright-report/
 test-results/
+.data/
