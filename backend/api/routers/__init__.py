@@ -9,6 +9,8 @@ from backend.api.routers.payments import router as payments_router
 from backend.api.routers.shipments import router as shipments_router
 from backend.api.routers.events import router as events_router
 from backend.api.routers.agent import router as agent_router
+from backend.api.routers.knowledge import router as knowledge_router
+from backend.api.routers.approvals import router as approvals_router
 
 __all__ = [
     "customers_router",
@@ -18,4 +20,7 @@ __all__ = [
     "shipments_router",
     "events_router",
     "agent_router",
+    "knowledge_router",
+    "approvals_router",
 ]
+

@@ -68,3 +68,27 @@ class TicketChannel(str, Enum):
     WHATSAPP = "WHATSAPP"
     PORTAL = "PORTAL"
     PHONE = "PHONE"
+
+
+class DocumentType(str, Enum):
+    """Classification of knowledge base documents."""
+    POLICY = "POLICY"
+    SOP = "SOP"
+    FAQ = "FAQ"
+    GUIDELINE = "GUIDELINE"
+
+
+class DocumentStatus(str, Enum):
+    """Publication status of knowledge documents."""
+    ACTIVE = "ACTIVE"
+    DRAFT = "DRAFT"
+    ARCHIVED = "ARCHIVED"
+
+
+class ApprovalStatus(str, Enum):
+    """Lifecycle states of a human approval request."""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+

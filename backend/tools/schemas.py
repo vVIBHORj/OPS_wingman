@@ -6,6 +6,7 @@ import uuid
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from database.models.enums import TicketPriority, TicketChannel
+from backend.workflows.state import StructuredAction
 
 
 class GetCustomerInput(BaseModel):

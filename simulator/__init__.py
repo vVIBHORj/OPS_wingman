@@ -21,6 +21,7 @@ from simulator.payments import (
     get_payment,
     capture_payment,
     fail_payment,
+    refund_payment,
     PAYMENT_TRANSITIONS,
 )
 from simulator.shipments import (

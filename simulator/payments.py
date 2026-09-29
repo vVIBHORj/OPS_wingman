@@ -244,3 +244,50 @@ def fail_payment(
     session.commit()
     session.refresh(payment)
     return payment
+
+
+def refund_payment(
+    session: Session,
+    payment_id: uuid.UUID,
+    reason: Optional[str] = None,
+    correlation_id: Optional[str] = None,
+) -> Payment:
+    """Refunds a successful payment, transitioning it to REFUNDED.
+
+    Records PAYMENT_REFUNDED domain event in the same transaction.
+    """
+    payment = get_payment(session, payment_id=payment_id)
+
+    allowed_targets = PAYMENT_TRANSITIONS.get(payment.status, set())
+    if PaymentStatus.REFUNDED not in allowed_targets:
+        raise InvalidStateTransitionError(
+            entity_type="Payment",
+            entity_id=str(payment.id),
+            current_status=payment.status.value,
+            target_status=PaymentStatus.REFUNDED.value,
+        )
+
+    prev_status = payment.status
+    payment.status = PaymentStatus.REFUNDED
+
+    record_event(
+        session=session,
+        event_type=EventType.PAYMENT_REFUNDED,
+        entity_type="Payment",
+        entity_id=payment.id,
+        payload={
+            "payment_reference": payment.payment_reference,
+            "order_id": str(payment.order_id),
+            "amount": str(payment.amount),
+            "currency": payment.currency,
+            "previous_status": prev_status.value,
+            "new_status": PaymentStatus.REFUNDED.value,
+            "reason": reason or "Customer refund processed",
+        },
+        correlation_id=correlation_id,
+    )
+
+    session.commit()
+    session.refresh(payment)
+    return payment
+

@@ -287,6 +287,9 @@ class WorkflowRunResponse(BaseModel):
     extracted_entities: Dict[str, Any] = Field(default_factory=dict)
     steps: List[WorkflowStepResponse] = Field(default_factory=list)
     proposed_actions: List[StructuredActionResponse] = Field(default_factory=list)
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
+    policy_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    approval_id: Optional[str] = None
     final_response: Optional[str] = None
     error: Optional[str] = None
     created_at: datetime

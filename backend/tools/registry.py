@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from database.models import Customer, Order, Payment, Shipment, Ticket
+from database.models import Customer, Order, Payment, Shipment, Ticket, PaymentStatus
 from backend.tools.base import ToolRegistry, ToolDefinition, ToolType, RiskLevel
 from backend.tools.schemas import (
     GetCustomerInput,
@@ -241,9 +241,14 @@ def handle_request_refund(inputs: RequestRefundInput, context: Optional[Dict[str
     if not db:
         raise ValueError("Database session required in tool context.")
 
-    order = db.get(Order, inputs.order_id)
+    order_id_val = inputs.order_id if isinstance(inputs.order_id, uuid.UUID) else uuid.UUID(str(inputs.order_id))
+    order = db.get(Order, order_id_val)
     if not order:
         raise ValueError(f"Order {inputs.order_id} not found.")
+
+    payment = db.scalar(select(Payment).where(Payment.order_id == order_id_val))
+    if payment and payment.status == PaymentStatus.SUCCESSFUL:
+        simulator.refund_payment(session=db, payment_id=payment.id, reason=inputs.reason)
 
     refund_ref = f"REF-{datetime_stamp()}-{uuid.uuid4().hex[:6].upper()}"
     amount = str(inputs.amount if inputs.amount is not None else order.total_amount)
@@ -255,8 +260,10 @@ def handle_request_refund(inputs: RequestRefundInput, context: Optional[Dict[str
         "amount": amount,
         "currency": order.currency,
         "reason": inputs.reason,
-        "status": "REFUND_REQUESTED",
+        "status": "REFUNDED" if (payment and payment.status == PaymentStatus.REFUNDED) else "REFUND_REQUESTED",
     }
+
+
 
 
 def handle_request_human_approval(inputs: RequestHumanApprovalInput, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

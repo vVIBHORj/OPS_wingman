@@ -11,6 +11,9 @@ from database.models.enums import (
     TicketStatus,
     TicketPriority,
     TicketChannel,
+    DocumentType,
+    DocumentStatus,
+    ApprovalStatus,
 )
 from database.models.event import EventType, DomainEvent
 from database.models.customer import Customer
@@ -19,6 +22,8 @@ from database.models.order import Order, OrderItem
 from database.models.payment import Payment
 from database.models.shipment import Shipment
 from database.models.ticket import Ticket
+from database.models.knowledge import KnowledgeDocument, KnowledgeChunk
+from database.models.approval import ApprovalRecord
 
 __all__ = [
     "Base",
@@ -32,6 +37,9 @@ __all__ = [
     "TicketStatus",
     "TicketPriority",
     "TicketChannel",
+    "DocumentType",
+    "DocumentStatus",
+    "ApprovalStatus",
     "EventType",
     "DomainEvent",
     "Customer",
@@ -41,4 +49,8 @@ __all__ = [
     "Payment",
     "Shipment",
     "Ticket",
+    "KnowledgeDocument",
+    "KnowledgeChunk",
+    "ApprovalRecord",
 ]
+

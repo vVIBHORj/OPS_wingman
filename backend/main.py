@@ -24,6 +24,8 @@ from backend.api.routers import (
     shipments_router,
     events_router,
     agent_router,
+    knowledge_router,
+    approvals_router,
 )
 
 
@@ -105,6 +107,8 @@ app.include_router(payments_router)
 app.include_router(shipments_router)
 app.include_router(events_router)
 app.include_router(agent_router)
+app.include_router(knowledge_router)
+app.include_router(approvals_router)
 
 
 # ==============================================================================
