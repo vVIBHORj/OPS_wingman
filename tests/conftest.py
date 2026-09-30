@@ -23,6 +23,7 @@ from database.models import (
     Base,
     Customer,
     DomainEvent,
+    IdempotencyRecord,
     KnowledgeChunk,
     KnowledgeDocument,
     Order,

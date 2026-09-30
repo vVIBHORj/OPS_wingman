@@ -92,3 +92,10 @@ class ApprovalStatus(str, Enum):
     REJECTED = "REJECTED"
     EXPIRED = "EXPIRED"
 
+
+class IdempotencyStatus(str, Enum):
+    """Lifecycle statuses of an idempotent operation."""
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
