@@ -78,6 +78,217 @@ opswingman/
 ├── docker-compose.yml         # Local infrastructure orchestration
 └── .env.example               # Environment variables template
 ```
+## 🏛️ System Architecture
+
+> **Core rule:** the LLM *proposes*, deterministic code *decides*. Authorization, policy, execution, verification and audit all live outside the model.
+
+**Legend:** 🟩 green = provisioned in Phase 0 (Docker infra) · ⬜ grey dashed = planned (Phases 1–7)
+
+```mermaid
+flowchart TB
+    %% ---------- INPUTS ----------
+    subgraph CH["1 · Input Channels"]
+        direction LR
+        EMAIL["Email<br/>Mailpit → Gmail sandbox"]
+        HOOK["Webhooks<br/>WhatsApp sim · Shopify · Razorpay"]
+        APIIN["REST API events"]
+        SIM["Business Simulator<br/>seeded ground truth"]
+    end
+
+    UI["Admin UI · Next.js + React Flow<br/>Workflows · Approvals · Audit · Analytics"]
+
+    %% ---------- BACKEND ----------
+    subgraph BE["2 · Backend · FastAPI + Pydantic"]
+        direction LR
+        INGEST["Event Ingestion<br/>validation · idempotency keys"]
+        QUEUE[("Valkey<br/>queue / cache")]
+        WORKER["Async Workers"]
+    end
+
+    %% ---------- AGENT ----------
+    subgraph AG["3 · Agent Orchestrator · LangGraph"]
+        direction LR
+        ORCH["Stateful workflow graph<br/>checkpoints · retry · resume"]
+        LLM["Local LLM · Ollama<br/>intent · plan · structured action"]
+    end
+
+    %% ---------- CONTEXT ----------
+    subgraph CTX["4 · Context and Signals"]
+        direction LR
+        RAG["RAG<br/>pgvector + full-text<br/>policy provenance"]
+        ML["ML Risk and Anomaly<br/>XGBoost / LightGBM<br/>Isolation Forest"]
+    end
+
+    %% ---------- CONTROL PLANE ----------
+    subgraph CTRL["5 · Deterministic Control Plane  (never delegated to the LLM)"]
+        direction LR
+        VAL["Action schema<br/>validation"]
+        POL["Policy engine"]
+        RBAC["RBAC +<br/>per-tool permissions"]
+        GATE{"Risk gate"}
+        VAL --> POL --> RBAC --> GATE
+    end
+
+    APPROVER["Human Approver"]
+    APPROVAL["Approval Queue<br/>pause · resume"]
+    BLOCK["Blocked / Escalated"]
+
+    %% ---------- EXECUTION ----------
+    subgraph EXEC["6 · Execution"]
+        direction LR
+        REG["Tool Registry<br/>typed · validated I/O<br/>MCP / native"]
+        VER["Verifier<br/>confirm real state change"]
+    end
+
+    subgraph EXT["External Systems  (mock → sandbox)"]
+        direction LR
+        ORD["Orders"]
+        PAY["Payments"]
+        LOG["Logistics"]
+        MSG["Email / Messaging"]
+        TKT["Tickets / CRM"]
+    end
+
+    %% ---------- DATA ----------
+    subgraph DATA["7 · Data Layer · PostgreSQL 16 + pgvector"]
+        direction LR
+        BIZ[("Business state<br/>customers · orders · payments<br/>shipments · tickets")]
+        WFS[("Workflow state<br/>runs · checkpoints · approvals")]
+        KB[("Knowledge base<br/>policy embeddings")]
+    end
+
+    %% ---------- OBSERVABILITY & EVAL ----------
+    subgraph OBS["8 · Observability, Audit and Evaluation"]
+        direction LR
+        AUDIT[("Append-only<br/>Audit log")]
+        OTEL["OpenTelemetry"]
+        LF["Langfuse<br/>self-hosted"]
+        EVAL["Eval harness<br/>golden datasets · regression"]
+        CI["GitHub Actions CI"]
+    end
+
+    %% ---------- MAIN FLOW ----------
+    EMAIL & HOOK & APIIN --> INGEST
+    SIM -.->|"synthetic events"| INGEST
+    UI <-->|"REST"| INGEST
+    INGEST --> QUEUE --> WORKER --> ORCH
+    ORCH <-->|"prompt / structured output"| LLM
+    ORCH -->|"retrieve policy"| RAG
+    ORCH -->|"risk features"| ML
+    RAG -->|"evidence + version"| ORCH
+    ML -->|"risk band"| ORCH
+
+    ORCH ==>|"proposed action (JSON)"| VAL
+    GATE -->|"LOW · permitted"| REG
+    GATE -->|"HIGH · approval required"| APPROVAL
+    GATE -->|"denied / policy conflict"| BLOCK
+    APPROVAL <--> APPROVER
+    UI <-->|"review"| APPROVAL
+    APPROVAL -->|"approved"| REG
+    APPROVAL -->|"rejected"| BLOCK
+    BLOCK --> ORCH
+
+    REG --> ORD & PAY & LOG & MSG & TKT
+    ORD & PAY & LOG & MSG & TKT --> VER
+    VER -->|"verified outcome"| ORCH
+
+    %% ---------- DATA + OBS EDGES ----------
+    ORCH <--> WFS
+    REG <--> BIZ
+    RAG <--> KB
+    APPROVAL <--> WFS
+    ORCH -.-> OTEL
+    OTEL -.-> LF
+    GATE -.-> AUDIT
+    APPROVAL -.-> AUDIT
+    VER -.-> AUDIT
+    LF -.-> EVAL
+    EVAL -.-> CI
+
+    %% ---------- STYLES ----------
+    classDef built fill:#d1fae5,stroke:#059669,color:#064e3b,stroke-width:2px;
+    classDef planned fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray:4 3;
+    classDef control fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
+    classDef human fill:#fef3c7,stroke:#d97706,color:#78350f;
+
+    class QUEUE,BIZ,WFS,KB,LF built;
+    class EMAIL,HOOK,APIIN,SIM,UI,INGEST,WORKER,ORCH,LLM,RAG,ML,APPROVAL,BLOCK,REG,VER,ORD,PAY,LOG,MSG,TKT,AUDIT,OTEL,EVAL,CI planned;
+    class VAL,POL,RBAC,GATE control;
+    class APPROVER human;
+```
+
+### Request lifecycle: high-value refund (Scenario A2)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as Customer
+    participant API as FastAPI + Queue
+    participant AG as LangGraph Agent
+    participant CX as RAG + ML Risk
+    participant CP as Control Plane
+    actor H as Human Approver
+    participant T as Tools + Payment sandbox
+    participant V as Verifier
+    participant A as Audit / Traces
+
+    C->>API: "Order 8472 cancel karo aur refund kar do"
+    API->>API: validate + idempotency check
+    API->>AG: enqueue event, start run (CREATED → RUNNING)
+    AG->>T: get_customer / get_order / get_payment (LOW)
+    AG->>CX: refund policy + risk features
+    CX-->>AG: policy evidence (versioned) + risk = HIGH
+    AG->>CP: proposed action {refund_order, amount, risk: high}
+    CP->>CP: schema + policy + RBAC checks
+    CP-->>AG: approval required
+    AG->>H: WAITING_FOR_APPROVAL (no refund executed)
+    H-->>AG: approve / reject
+    alt approved
+        AG->>T: request_refund (idempotency key)
+        T-->>V: refund result
+        V->>V: confirm refund actually landed
+        V-->>AG: VERIFY = SUCCESS
+        AG->>C: confirmation message
+    else rejected
+        AG->>C: controlled explanation / escalation
+    end
+    AG-->>A: every step: tool · policy · model · result
+    Note over AG,A: Run ends COMPLETED / FAILED / CANCELLED
+```
+
+### Local infrastructure (Docker Compose)
+
+```mermaid
+flowchart LR
+    DEV["Developer machine"]
+
+    subgraph HOST["Host processes"]
+        FE["Next.js frontend<br/>:3000"]
+        BE["FastAPI backend<br/>:8000 · /docs"]
+        OLL["Ollama<br/>local LLM + embeddings"]
+    end
+
+    subgraph DC["docker compose"]
+        PG[("PostgreSQL 16 + pgvector<br/>:5432")]
+        VK[("Valkey<br/>:6379")]
+        MP["Mailpit<br/>SMTP :1025 · UI :8025"]
+        LFW["Langfuse<br/>:3001"]
+        LFD[("Langfuse DB<br/>Postgres 16")]
+    end
+
+    DEV --> FE --> BE
+    BE --> PG
+    BE --> VK
+    BE -->|"SMTP"| MP
+    BE -->|"inference"| OLL
+    BE -.->|"traces"| LFW --> LFD
+
+    classDef built fill:#d1fae5,stroke:#059669,color:#064e3b;
+    classDef planned fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray:4 3;
+    class PG,VK,MP,LFW,LFD built;
+    class FE,BE,OLL planned;
+```
+
 
 ---
 
