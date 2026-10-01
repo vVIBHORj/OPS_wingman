@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.agents.ops_agent import OpsAgent
 from backend.tools.base import ToolDefinition, ToolRegistry
 from backend.tools.registry import create_default_tool_registry
+from backend.verification import StateVerificationService, state_verification_service
 from backend.workflows.state import WorkflowRunRecord
 from backend.workflows.checkpoint import checkpoint_store
 
@@ -16,9 +17,17 @@ from backend.workflows.checkpoint import checkpoint_store
 class OpsAgentService:
     """Service facade for managing agent executions and workflow lifecycle."""
 
-    def __init__(self, tool_registry: Optional[ToolRegistry] = None) -> None:
+    def __init__(
+        self,
+        tool_registry: Optional[ToolRegistry] = None,
+        verification_service: Optional[StateVerificationService] = None,
+    ) -> None:
         self.tool_registry = tool_registry or create_default_tool_registry()
-        self.agent = OpsAgent(tool_registry=self.tool_registry)
+        self.verification_service = verification_service or state_verification_service
+        self.agent = OpsAgent(
+            tool_registry=self.tool_registry,
+            verification_service=self.verification_service,
+        )
 
     def execute_workflow(
         self,
@@ -54,6 +63,21 @@ class OpsAgentService:
     ) -> WorkflowRunRecord:
         """Resumes a paused workflow run with an approval decision."""
         return self.agent.resume(
+            run_id=run_id,
+            approved=approved,
+            db=db,
+            reason=reason,
+        )
+
+    def resume_approved_action(
+        self,
+        run_id: str,
+        db: Session,
+        approved: bool = True,
+        reason: Optional[str] = None,
+    ) -> WorkflowRunRecord:
+        """Resumes an approved action with post-action verification."""
+        return self.agent.resume_approved_action(
             run_id=run_id,
             approved=approved,
             db=db,

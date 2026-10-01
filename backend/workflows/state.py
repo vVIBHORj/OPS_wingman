@@ -73,6 +73,7 @@ class WorkflowRunRecord(BaseModel):
     proposed_actions: List[StructuredAction] = Field(default_factory=list)
     citations: List[Dict[str, Any]] = Field(default_factory=list)
     policy_decisions: List[Dict[str, Any]] = Field(default_factory=list)
+    verification_results: List[Dict[str, Any]] = Field(default_factory=list)
     approval_id: Optional[str] = None
     final_response: Optional[str] = None
     error: Optional[str] = None

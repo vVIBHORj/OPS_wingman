@@ -20,6 +20,13 @@ from backend.rag.schemas import KnowledgeCitation, RetrievalRequest
 from backend.rag.service import RAGService
 from backend.tools.base import RiskLevel, ToolRegistry
 from backend.tools.registry import create_default_tool_registry
+from backend.verification import (
+    StateVerificationService,
+    VerificationRequest,
+    VerificationResult,
+    VerificationStatus,
+    state_verification_service,
+)
 from backend.workflows.checkpoint import checkpoint_store
 from backend.workflows.state import StructuredAction, WorkflowRunRecord, WorkflowState
 from database.models.enums import ApprovalStatus
@@ -41,6 +48,7 @@ class AgentGraphState(TypedDict, total=False):
     tool_results: Dict[str, Any]
     proposed_actions: List[Dict[str, Any]]
     policy_decisions: List[Dict[str, Any]]
+    verification_results: List[Dict[str, Any]]
     requires_approval: bool
     approval_id: Optional[str]
     final_response: Optional[str]
@@ -52,8 +60,13 @@ class AgentGraphState(TypedDict, total=False):
 class OpsAgent:
     """Stateful workflow agent orchestrating operational inquiries and policy-gated actions."""
 
-    def __init__(self, tool_registry: Optional[ToolRegistry] = None) -> None:
+    def __init__(
+        self,
+        tool_registry: Optional[ToolRegistry] = None,
+        verification_service: Optional[StateVerificationService] = None,
+    ) -> None:
         self.tools = tool_registry or create_default_tool_registry()
+        self.verification_service = verification_service or state_verification_service
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -64,6 +77,7 @@ class OpsAgent:
         builder.add_node("plan_tools", self._node_plan_tools)
         builder.add_node("execute_tools", self._node_execute_tools)
         builder.add_node("evaluate_policy", self._node_evaluate_policy)
+        builder.add_node("verify_execution", self._node_verify_execution)
         builder.add_node("synthesize_response", self._node_synthesize_response)
 
         builder.set_entry_point("interpret_request")
@@ -71,7 +85,8 @@ class OpsAgent:
         builder.add_edge("retrieve_knowledge", "plan_tools")
         builder.add_edge("plan_tools", "execute_tools")
         builder.add_edge("execute_tools", "evaluate_policy")
-        builder.add_edge("evaluate_policy", "synthesize_response")
+        builder.add_edge("evaluate_policy", "verify_execution")
+        builder.add_edge("verify_execution", "synthesize_response")
         builder.add_edge("synthesize_response", END)
 
         return builder.compile()
@@ -345,6 +360,100 @@ class OpsAgent:
             "workflow_state": wf_state.value,
         }
 
+    def _node_verify_execution(self, state: AgentGraphState) -> Dict[str, Any]:
+        """Runs post-action state verification on executed state-changing operations (D-14)."""
+        executed_tools = state.get("executed_tools", [])
+        tool_results = state.get("tool_results", {})
+        db = state.get("db")
+        run_id = state.get("run_id", "")
+        verification_results: List[Dict[str, Any]] = list(state.get("verification_results") or [])
+        errors: List[str] = []
+
+        if not db:
+            return {"verification_results": verification_results}
+
+        for tool_name in executed_tools:
+            res_dict = tool_results.get(tool_name, {})
+            # Only verify if tool execution reported success
+            if not res_dict or not res_dict.get("success", False):
+                continue
+
+            data = res_dict.get("data") or {}
+
+            if tool_name == "cancel_order":
+                order_id = data.get("id") or data.get("order_number") or state.get("order_id") or state.get("order_number")
+                if order_id:
+                    ver_req = VerificationRequest(
+                        entity_type="order",
+                        entity_id=str(order_id),
+                        target_state="CANCELLED",
+                        operation="cancel_order",
+                        expected_attributes={"cancellation_reason": data.get("cancellation_reason")} if data.get("cancellation_reason") else {},
+                    )
+                    ver_res = self.verification_service.verify(session=db, request=ver_req)
+                    ver_dump = ver_res.model_dump(mode="json")
+                    verification_results.append(ver_dump)
+                    if not ver_res.verified:
+                        errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
+
+            elif tool_name == "request_refund":
+                order_id = data.get("order_id") or state.get("order_id")
+                if order_id:
+                    ver_req = VerificationRequest(
+                        entity_type="payment",
+                        entity_id=str(order_id),
+                        target_state="REFUNDED",
+                        operation="request_refund",
+                    )
+                    ver_res = self.verification_service.verify(session=db, request=ver_req)
+                    ver_dump = ver_res.model_dump(mode="json")
+                    verification_results.append(ver_dump)
+                    if not ver_res.verified:
+                        errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
+
+            elif tool_name == "create_ticket":
+                ticket_id = data.get("id") or data.get("ticket_number")
+                if ticket_id:
+                    ver_req = VerificationRequest(
+                        entity_type="ticket",
+                        entity_id=str(ticket_id),
+                        target_state="OPEN",
+                        operation="create_ticket",
+                        expected_attributes={"priority": data.get("priority")} if data.get("priority") else {},
+                    )
+                    ver_res = self.verification_service.verify(session=db, request=ver_req)
+                    ver_dump = ver_res.model_dump(mode="json")
+                    verification_results.append(ver_dump)
+                    if not ver_res.verified:
+                        errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
+
+        if verification_results:
+            has_divergence = any(
+                r.get("status") in [
+                    VerificationStatus.DIVERGENT.value,
+                    VerificationStatus.NOT_FOUND.value,
+                    VerificationStatus.ERROR.value,
+                ]
+                for r in verification_results
+            )
+            step_state = WorkflowState.FAILED if has_divergence else WorkflowState.RUNNING
+            checkpoint_store.add_step(
+                run_id=run_id,
+                step_name="verify_execution",
+                state=step_state,
+                output_payload={"verification_results": verification_results},
+                error="; ".join(errors) if errors else None,
+            )
+
+        updated_state: Dict[str, Any] = {
+            "verification_results": verification_results,
+        }
+        if errors:
+            updated_state["error"] = "; ".join(errors)
+            updated_state["workflow_state"] = WorkflowState.FAILED.value
+
+        return updated_state
+
     def _node_synthesize_response(self, state: AgentGraphState) -> Dict[str, Any]:
         """Synthesizes human-readable operational response based on retrieved data and policy decisions."""
         intent = state.get("intent", "general_order_inquiry")
@@ -362,7 +471,25 @@ class OpsAgent:
         citation_tags = [f"[{c.get('document_id')} v{c.get('version')}]" for c in citations[:2]]
         citation_suffix = f" (Policy Refs: {', '.join(citation_tags)})" if citation_tags else ""
 
-        if not order_info and not state.get("order_number"):
+        # Check if post-action verification produced any divergence or error
+        ver_results = state.get("verification_results", [])
+        ver_failure = next(
+            (
+                r for r in ver_results
+                if r.get("status") in [
+                    VerificationStatus.DIVERGENT.value,
+                    VerificationStatus.NOT_FOUND.value,
+                    VerificationStatus.ERROR.value,
+                ]
+            ),
+            None,
+        )
+
+        if ver_failure:
+            err_details = ", ".join(ver_failure.get("discrepancies", [])) or ver_failure.get("error") or ver_failure.get("status")
+            response = f"Action execution failed post-action state verification ({ver_failure.get('status')}): {err_details}"
+            final_state = WorkflowState.FAILED
+        elif not order_info and not state.get("order_number"):
             response = "Thank you for reaching out to OpsWingman. Could you please provide your Order Number (e.g., ORD-YYYYMMDD-XXXXXX) so I can retrieve your details?"
             final_state = WorkflowState.COMPLETED
         elif not order_info:
@@ -461,6 +588,7 @@ class OpsAgent:
             run_record.proposed_actions = [StructuredAction(**a) for a in state.get("proposed_actions", [])]
             run_record.citations = state.get("retrieved_citations", [])
             run_record.policy_decisions = state.get("policy_decisions", [])
+            run_record.verification_results = state.get("verification_results", [])
             run_record.approval_id = state.get("approval_id")
             if order_info:
                 run_record.order_id = order_info.get("id")
@@ -512,6 +640,7 @@ class OpsAgent:
             "proposed_actions": [],
             "retrieved_citations": [],
             "policy_decisions": [],
+            "verification_results": [],
             "requires_approval": False,
             "approval_id": None,
             "workflow_state": WorkflowState.CREATED.value,
@@ -532,7 +661,8 @@ class OpsAgent:
     ) -> WorkflowRunRecord:
         """Resumes a paused workflow run awaiting human approval.
 
-        If approved: executes the gated structured action using approved authorization token.
+        If approved: executes the gated structured action using approved authorization token,
+        performs post-action state verification against persistent database truth, and synthesizes response.
         If rejected: marks workflow CANCELLED without executing action.
         """
         run_record = checkpoint_store.get(run_id)
@@ -594,6 +724,37 @@ class OpsAgent:
                     run_record.final_response = f"Failed to execute approved cancellation: {res.error}"
                     return checkpoint_store.save(run_record)
 
+                # Post-action state verification
+                if db:
+                    ver_req = VerificationRequest(
+                        entity_type="order",
+                        entity_id=str(order_id),
+                        target_state="CANCELLED",
+                        operation="cancel_order",
+                        expected_attributes={"cancellation_reason": action.reason} if action.reason else {},
+                    )
+                    ver_res = self.verification_service.verify(session=db, request=ver_req)
+                    ver_dump = ver_res.model_dump(mode="json")
+                    run_record.verification_results.append(ver_dump)
+
+                    checkpoint_store.add_step(
+                        run_id=run_id,
+                        step_name="verify_execution_cancel_order",
+                        state=WorkflowState.RUNNING if ver_res.verified else WorkflowState.FAILED,
+                        tool_name="cancel_order",
+                        input_payload=ver_req.model_dump(mode="json"),
+                        output_payload=ver_dump,
+                        error=ver_res.error or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
+                    )
+
+                    if not ver_res.verified:
+                        run_record.state = WorkflowState.FAILED
+                        err_details = ", ".join(ver_res.discrepancies) or ver_res.error or f"State verification failed with status {ver_res.status.value}"
+                        err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
+                        run_record.error = err_msg
+                        run_record.final_response = f"Approved cancellation executed but state verification failed ({ver_res.status.value}): {err_details}"
+                        return checkpoint_store.save(run_record)
+
             elif action.action == "request_refund":
                 order_id = run_record.order_id
                 if not order_id and action.parameters.get("order_number") and db:
@@ -626,6 +787,89 @@ class OpsAgent:
                     run_record.final_response = f"Failed to execute approved refund: {res.error}"
                     return checkpoint_store.save(run_record)
 
+                # Post-action state verification
+                if db:
+                    ver_req = VerificationRequest(
+                        entity_type="payment",
+                        entity_id=str(order_id),
+                        target_state="REFUNDED",
+                        operation="request_refund",
+                    )
+                    ver_res = self.verification_service.verify(session=db, request=ver_req)
+                    ver_dump = ver_res.model_dump(mode="json")
+                    run_record.verification_results.append(ver_dump)
+
+                    checkpoint_store.add_step(
+                        run_id=run_id,
+                        step_name="verify_execution_request_refund",
+                        state=WorkflowState.RUNNING if ver_res.verified else WorkflowState.FAILED,
+                        tool_name="request_refund",
+                        input_payload=ver_req.model_dump(mode="json"),
+                        output_payload=ver_dump,
+                        error=ver_res.error or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
+                    )
+
+                    if not ver_res.verified:
+                        run_record.state = WorkflowState.FAILED
+                        err_details = ", ".join(ver_res.discrepancies) or ver_res.error or f"State verification failed with status {ver_res.status.value}"
+                        err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
+                        run_record.error = err_msg
+                        run_record.final_response = f"Approved refund executed but state verification failed ({ver_res.status.value}): {err_details}"
+                        return checkpoint_store.save(run_record)
+
+            elif action.action == "create_ticket":
+                res = self.tools.execute(
+                    "create_ticket",
+                    params=action.parameters,
+                    context={"db": db, "approved": True},
+                )
+                checkpoint_store.add_step(
+                    run_id=run_id,
+                    step_name="execute_approved_action_create_ticket",
+                    state=WorkflowState.RUNNING if res.success else WorkflowState.FAILED,
+                    tool_name="create_ticket",
+                    input_payload=action.parameters,
+                    output_payload=res.model_dump(),
+                    error=res.error,
+                )
+                if not res.success:
+                    run_record.state = WorkflowState.FAILED
+                    run_record.error = res.error
+                    run_record.final_response = f"Failed to execute approved ticket creation: {res.error}"
+                    return checkpoint_store.save(run_record)
+
+                if db and res.data:
+                    ticket_id = res.data.get("id") or res.data.get("ticket_number")
+                    if ticket_id:
+                        ver_req = VerificationRequest(
+                            entity_type="ticket",
+                            entity_id=str(ticket_id),
+                            target_state="OPEN",
+                            operation="create_ticket",
+                            expected_attributes={"priority": res.data.get("priority")} if res.data.get("priority") else {},
+                        )
+                        ver_res = self.verification_service.verify(session=db, request=ver_req)
+                        ver_dump = ver_res.model_dump(mode="json")
+                        run_record.verification_results.append(ver_dump)
+
+                        checkpoint_store.add_step(
+                            run_id=run_id,
+                            step_name="verify_execution_create_ticket",
+                            state=WorkflowState.RUNNING if ver_res.verified else WorkflowState.FAILED,
+                            tool_name="create_ticket",
+                            input_payload=ver_req.model_dump(mode="json"),
+                            output_payload=ver_dump,
+                            error=ver_res.error or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
+                        )
+
+                        if not ver_res.verified:
+                            run_record.state = WorkflowState.FAILED
+                            err_details = ", ".join(ver_res.discrepancies) or ver_res.error or f"State verification failed with status {ver_res.status.value}"
+                            err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
+                            run_record.error = err_msg
+                            run_record.final_response = f"Approved ticket creation executed but state verification failed ({ver_res.status.value}): {err_details}"
+                            return checkpoint_store.save(run_record)
+
         succ_response = "Approved actions executed successfully. Order operations completed."
         checkpoint_store.add_step(
             run_id=run_id,
@@ -637,3 +881,13 @@ class OpsAgent:
         run_record.state = WorkflowState.COMPLETED
         run_record.final_response = succ_response
         return checkpoint_store.save(run_record)
+
+    def resume_approved_action(
+        self,
+        run_id: str,
+        approved: bool = True,
+        db: Optional[Session] = None,
+        reason: Optional[str] = None,
+    ) -> WorkflowRunRecord:
+        """Resumes an approved action and executes post-action state verification."""
+        return self.resume(run_id=run_id, approved=approved, db=db, reason=reason)

@@ -15,18 +15,18 @@ OpsWingman provides a reliable operations execution layer for customer and order
 
 ---
 
-## 📊 Current Status: Phase 0 — Foundation
+## 📊 Current Status: Phase 4 — ML Risk Scoring, Verification & Resilience
 
-The repository is currently at **Phase 0 (Foundation)**.
+The repository is currently at **Phase 4 (ML Risk Scoring)**.
 
 - [x] Monorepo directory structure established
 - [x] Docker & local development environment configured
 - [x] Baseline dependencies & packaging defined (FastAPI / Next.js)
 - [x] Foundation architecture documentation & coding conventions documented
 - [x] Unit test harness initialized
-- [ ] *Phase 1: Operational API & Business Simulator (Next milestone)*
-- [ ] *Phase 2: Workflow Engine, State & Tool Registry*
-- [ ] *Phase 3: RAG, Policy Engine & Human Approval Queue*
+- [x] *Phase 1: Operational API & Business Simulator (Next milestone)*
+- [x] *Phase 2: Workflow Engine, State & Tool Registry*
+- [x] *Phase 3: RAG, Policy Engine & Human Approval Queue*
 - [ ] *Phase 4: ML Risk Scoring, Verification & Resilience*
 - [ ] *Phase 5: Evaluation Harness, Benchmark Datasets & E2E Verification*
 

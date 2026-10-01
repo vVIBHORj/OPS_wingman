@@ -26,7 +26,9 @@ from backend.api.routers import (
     agent_router,
     knowledge_router,
     approvals_router,
+    ml_router,
 )
+
 
 
 @asynccontextmanager
@@ -109,6 +111,7 @@ app.include_router(events_router)
 app.include_router(agent_router)
 app.include_router(knowledge_router)
 app.include_router(approvals_router)
+app.include_router(ml_router)
 
 
 # ==============================================================================
