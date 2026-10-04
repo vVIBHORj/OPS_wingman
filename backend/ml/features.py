@@ -1,5 +1,6 @@
 """Feature extraction for operational risk scoring (Phase 4 - Deliverable D-13)."""
 
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import select
@@ -90,11 +91,17 @@ class FeatureExtractor:
         now: Optional[datetime] = None,
     ) -> RiskFeatureVector:
         """Extracts RiskFeatureVector by querying database entities for the given order_id."""
-        order = session.scalar(
-            select(Order).where(
-                (Order.id == order_id) if hasattr(Order.id, "__eq__") else (Order.order_number == order_id)
+        order = None
+        try:
+            val_uuid = uuid.UUID(str(order_id))
+            order = session.get(Order, val_uuid)
+        except (ValueError, TypeError):
+            pass
+
+        if order is None:
+            order = session.scalar(
+                select(Order).where(Order.order_number == str(order_id))
             )
-        )
         if order is None:
             # Return neutral baseline vector if order not found
             return RiskFeatureVector()

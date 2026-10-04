@@ -14,6 +14,12 @@ from sqlalchemy.orm import Session
 
 import simulator
 from backend.approvals.service import ApprovalService
+from backend.ml import (
+    MLRiskService,
+    RiskBand,
+    RiskFeatureVector,
+    ml_risk_service,
+)
 from backend.policies.engine import policy_engine
 from backend.policies.schemas import PolicyEvaluationResult
 from backend.rag.schemas import KnowledgeCitation, RetrievalRequest
@@ -47,6 +53,7 @@ class AgentGraphState(TypedDict, total=False):
     executed_tools: List[str]
     tool_results: Dict[str, Any]
     proposed_actions: List[Dict[str, Any]]
+    risk_assessment: Optional[Dict[str, Any]]
     policy_decisions: List[Dict[str, Any]]
     verification_results: List[Dict[str, Any]]
     requires_approval: bool
@@ -64,9 +71,11 @@ class OpsAgent:
         self,
         tool_registry: Optional[ToolRegistry] = None,
         verification_service: Optional[StateVerificationService] = None,
+        risk_service: Optional[MLRiskService] = None,
     ) -> None:
         self.tools = tool_registry or create_default_tool_registry()
         self.verification_service = verification_service or state_verification_service
+        self.risk_service = risk_service or ml_risk_service
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -76,6 +85,7 @@ class OpsAgent:
         builder.add_node("retrieve_knowledge", self._node_retrieve_knowledge)
         builder.add_node("plan_tools", self._node_plan_tools)
         builder.add_node("execute_tools", self._node_execute_tools)
+        builder.add_node("assess_risk", self._node_assess_risk)
         builder.add_node("evaluate_policy", self._node_evaluate_policy)
         builder.add_node("verify_execution", self._node_verify_execution)
         builder.add_node("synthesize_response", self._node_synthesize_response)
@@ -84,7 +94,8 @@ class OpsAgent:
         builder.add_edge("interpret_request", "retrieve_knowledge")
         builder.add_edge("retrieve_knowledge", "plan_tools")
         builder.add_edge("plan_tools", "execute_tools")
-        builder.add_edge("execute_tools", "evaluate_policy")
+        builder.add_edge("execute_tools", "assess_risk")
+        builder.add_edge("assess_risk", "evaluate_policy")
         builder.add_edge("evaluate_policy", "verify_execution")
         builder.add_edge("verify_execution", "synthesize_response")
         builder.add_edge("synthesize_response", END)
@@ -279,6 +290,81 @@ class OpsAgent:
             "tool_results": results,
         }
 
+    def _node_assess_risk(self, state: AgentGraphState) -> Dict[str, Any]:
+        """Assesses dynamic operational risk using the ML risk subsystem (D-13).
+
+        Evaluates features from database entities or execution state, records model metadata
+        and anomalies, and updates proposed action risk ratings accordingly.
+        """
+        tool_results = state.get("tool_results", {})
+        order_data = tool_results.get("get_order", {}).get("data") or {}
+        shipment_data = tool_results.get("get_shipment", {}).get("data") or {}
+        payment_data = tool_results.get("get_payment", {}).get("data") or {}
+
+        target_order_id = (
+            order_data.get("id")
+            or state.get("order_id")
+            or order_data.get("order_number")
+            or state.get("order_number")
+        )
+        db = state.get("db")
+        run_id = state.get("run_id", "")
+
+        risk_res = None
+        if db is not None and target_order_id is not None:
+            try:
+                risk_res = self.risk_service.assess_order(session=db, order_id=str(target_order_id))
+            except Exception:
+                risk_res = None
+
+        if risk_res is None:
+            # Fallback to feature-vector scoring from in-memory tool results
+            order_amount = float(order_data.get("total_amount", 0.0) or 0.0)
+            delivery_delay_hours = (
+                24.0
+                if (shipment_data.get("delay_reason") or shipment_data.get("status") == "DELAYED")
+                else 0.0
+            )
+            failed_payments = 1 if payment_data.get("status") == "FAILED" else 0
+            features = RiskFeatureVector(
+                order_amount=max(0.0, order_amount),
+                delivery_delay_hours=delivery_delay_hours,
+                failed_payment_count=failed_payments,
+            )
+            risk_res = self.risk_service.assess_risk(features)
+
+        risk_dict = risk_res.model_dump(mode="json")
+        anomaly_flags = list(risk_res.anomaly.anomaly_flags) if risk_res.anomaly else []
+        risk_flags = anomaly_flags or risk_res.top_risk_factors
+
+        # Update proposed actions with ML risk insights
+        proposed_actions = list(state.get("proposed_actions", []))
+        if risk_res.risk_band == RiskBand.HIGH:
+            for act in proposed_actions:
+                act["risk"] = RiskLevel.HIGH.value
+                if risk_flags:
+                    reasons = "; ".join(risk_flags)
+                    existing_reason = act.get("reason", "")
+                    act["reason"] = f"{existing_reason} [Elevated Risk: {reasons}]".strip()
+        elif risk_res.risk_band == RiskBand.MEDIUM:
+            for act in proposed_actions:
+                if act.get("risk") == RiskLevel.LOW.value:
+                    act["risk"] = RiskLevel.MEDIUM.value
+
+        checkpoint_store.add_step(
+            run_id=run_id,
+            step_name="assess_risk",
+            state=WorkflowState.RUNNING,
+            output_payload={
+                "risk_assessment": risk_dict,
+            },
+        )
+
+        return {
+            "risk_assessment": risk_dict,
+            "proposed_actions": proposed_actions,
+        }
+
     def _node_evaluate_policy(self, state: AgentGraphState) -> Dict[str, Any]:
         """Evaluates domain policies deterministically against ground-truth database facts (D-11).
 
@@ -293,6 +379,14 @@ class OpsAgent:
         shipment_data = tool_results.get("get_shipment", {}).get("data") or {}
         payment_data = tool_results.get("get_payment", {}).get("data") or {}
 
+        risk_assessment = state.get("risk_assessment") or {}
+        ml_risk_score = float(risk_assessment.get("risk_score", 0.0) or 0.0)
+        ml_risk_band = str(risk_assessment.get("risk_band", "LOW")).upper()
+        anomaly_dict = risk_assessment.get("anomaly") or {}
+        ml_anomalies = list(anomaly_dict.get("anomaly_flags") or [])
+        ml_anomaly_detected = bool(anomaly_dict.get("is_anomaly", False)) or len(ml_anomalies) > 0
+        ml_version = str(risk_assessment.get("model_version", "v1.0.0"))
+
         # Construct ground truth facts
         facts: Dict[str, Any] = {
             "order_status": order_data.get("status"),
@@ -302,6 +396,11 @@ class OpsAgent:
             "shipment_status": shipment_data.get("status"),
             "is_delayed": bool(shipment_data.get("delay_reason")),
             "cancellation_window_valid": order_data.get("status") in ["PENDING", "CONFIRMED"],
+            "ml_risk_score": ml_risk_score,
+            "ml_risk_band": ml_risk_band,
+            "ml_anomaly_detected": ml_anomaly_detected,
+            "ml_anomaly_reasons": ml_anomalies,
+            "ml_model_version": ml_version,
         }
 
         policy_decisions: List[Dict[str, Any]] = []
@@ -589,6 +688,7 @@ class OpsAgent:
             run_record.citations = state.get("retrieved_citations", [])
             run_record.policy_decisions = state.get("policy_decisions", [])
             run_record.verification_results = state.get("verification_results", [])
+            run_record.risk_assessment = state.get("risk_assessment")
             run_record.approval_id = state.get("approval_id")
             if order_info:
                 run_record.order_id = order_info.get("id")
@@ -641,6 +741,7 @@ class OpsAgent:
             "retrieved_citations": [],
             "policy_decisions": [],
             "verification_results": [],
+            "risk_assessment": None,
             "requires_approval": False,
             "approval_id": None,
             "workflow_state": WorkflowState.CREATED.value,

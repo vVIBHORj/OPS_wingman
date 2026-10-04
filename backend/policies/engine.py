@@ -88,23 +88,46 @@ class PolicyEngine:
 
         # Eligible orders (PENDING, CONFIRMED)
         if order_status in ["PENDING", "CONFIRMED"]:
+            ml_anomaly = bool(facts.get("ml_anomaly_detected", False))
+            ml_risk_band = str(facts.get("ml_risk_band", "")).upper()
+            ml_risk_score = float(facts.get("ml_risk_score", 0.0) or 0.0)
+            ml_anomaly_reasons = facts.get("ml_anomaly_reasons") or []
+
+            matched = [
+                "CAN-R01",
+                "POL-CAN-001.R1: Eligible pre-dispatch cancellation",
+            ]
+
             if total_amount > self.HIGH_VALUE_ORDER_THRESHOLD:
                 decision_msg = (
                     f"High-value order cancellation (INR {total_amount:.2f} > INR {self.HIGH_VALUE_ORDER_THRESHOLD:.2f}) "
                     f"requires human supervisor approval under POL-CAN-001."
                 )
-                matched = [
-                    "CAN-R01",
+                matched.extend([
                     "CAN-R03",
-                    "POL-CAN-001.R1: Eligible pre-dispatch cancellation",
                     "POL-CAN-001.R3: High-value cancellation approval threshold",
-                ]
+                ])
             else:
                 decision_msg = (
                     f"Order cancellation is eligible under POL-CAN-001 (Status: {order_status}). "
                     f"Action classified as HIGH risk and requires operator approval."
                 )
-                matched = ["CAN-R01", "POL-CAN-001.R1: Eligible pre-dispatch cancellation"]
+
+            if ml_anomaly or ml_risk_band == "HIGH" or ml_risk_score >= 0.70:
+                anomaly_desc = f" (Reasons: {', '.join(ml_anomaly_reasons)})" if ml_anomaly_reasons else ""
+                decision_msg += f" Elevated ML Risk flagged [Score: {ml_risk_score:.2f}, Band: {ml_risk_band or 'HIGH'}]{anomaly_desc}."
+                matched.append("POL-CAN-001.R5: ML Anomaly / High Risk detected")
+
+            relevant_facts: Dict[str, Any] = {
+                "order_status": order_status,
+                "order_total_amount": str(total_amount),
+            }
+            if ml_anomaly or ml_risk_band:
+                relevant_facts.update({
+                    "ml_risk_score": ml_risk_score,
+                    "ml_risk_band": ml_risk_band,
+                    "ml_anomaly_detected": ml_anomaly,
+                })
 
             return PolicyEvaluationResult(
                 allowed=True,
@@ -113,7 +136,7 @@ class PolicyEngine:
                 policy_id="POL-CAN-001",
                 policy_version="1.0.0",
                 matched_rules=matched,
-                relevant_facts={"order_status": order_status, "order_total_amount": str(total_amount)},
+                relevant_facts=relevant_facts,
                 citations=citations,
             )
 
@@ -157,7 +180,35 @@ class PolicyEngine:
                 citations=citations,
             )
 
-        # 2. Check value threshold
+        ml_anomaly = bool(facts.get("ml_anomaly_detected", False))
+        ml_risk_band = str(facts.get("ml_risk_band", "")).upper()
+        ml_risk_score = float(facts.get("ml_risk_score", 0.0) or 0.0)
+        ml_anomaly_reasons = facts.get("ml_anomaly_reasons") or []
+
+        # 2. Check ML anomaly / high risk first
+        if ml_anomaly or ml_risk_band == "HIGH" or ml_risk_score >= 0.70:
+            anomaly_detail = f" (Reasons: {', '.join(ml_anomaly_reasons)})" if ml_anomaly_reasons else ""
+            return PolicyEvaluationResult(
+                allowed=True,
+                requires_approval=True,
+                decision=(
+                    f"Refund of INR {refund_amount:.2f} requires human supervisor approval due to elevated ML Risk "
+                    f"[Score: {ml_risk_score:.2f}, Band: {ml_risk_band or 'HIGH'}]{anomaly_detail}."
+                ),
+                policy_id="POL-REF-001",
+                policy_version="1.0.0",
+                matched_rules=["REF-R04", "POL-REF-001.R4: ML Anomaly / High Risk detected"],
+                relevant_facts={
+                    "payment_status": payment_status,
+                    "refund_amount": str(refund_amount),
+                    "ml_risk_score": ml_risk_score,
+                    "ml_risk_band": ml_risk_band,
+                    "ml_anomaly_detected": ml_anomaly,
+                },
+                citations=citations,
+            )
+
+        # 3. Check value threshold
         if refund_amount > self.AUTO_REFUND_THRESHOLD:
             return PolicyEvaluationResult(
                 allowed=True,

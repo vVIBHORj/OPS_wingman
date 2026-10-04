@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 
 from backend.agents.ops_agent import OpsAgent
+from backend.ml import MLRiskService, ml_risk_service
 from backend.tools.base import ToolDefinition, ToolRegistry
 from backend.tools.registry import create_default_tool_registry
 from backend.verification import StateVerificationService, state_verification_service
@@ -21,12 +22,15 @@ class OpsAgentService:
         self,
         tool_registry: Optional[ToolRegistry] = None,
         verification_service: Optional[StateVerificationService] = None,
+        risk_service: Optional[MLRiskService] = None,
     ) -> None:
         self.tool_registry = tool_registry or create_default_tool_registry()
         self.verification_service = verification_service or state_verification_service
+        self.risk_service = risk_service or ml_risk_service
         self.agent = OpsAgent(
             tool_registry=self.tool_registry,
             verification_service=self.verification_service,
+            risk_service=self.risk_service,
         )
 
     def execute_workflow(

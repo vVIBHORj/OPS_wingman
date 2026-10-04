@@ -74,6 +74,7 @@ class WorkflowRunRecord(BaseModel):
     citations: List[Dict[str, Any]] = Field(default_factory=list)
     policy_decisions: List[Dict[str, Any]] = Field(default_factory=list)
     verification_results: List[Dict[str, Any]] = Field(default_factory=list)
+    risk_assessment: Optional[Dict[str, Any]] = None
     approval_id: Optional[str] = None
     final_response: Optional[str] = None
     error: Optional[str] = None

@@ -172,19 +172,19 @@ def test_feature_validation_constraints():
     """8. & 12. Verifies Pydantic rejects invalid/negative inputs."""
     # Negative order amount
     with pytest.raises(ValidationError):
-        RiskFeatureVector(order_amount=-100.0)
+        RiskFeatureVector.model_validate({"order_amount": -100.0})
 
     # Negative account age
     with pytest.raises(ValidationError):
-        RiskFeatureVector(account_age_days=-5.0)
+        RiskFeatureVector.model_validate({"account_age_days": -5.0})
 
     # Refund ratio > 1.0
     with pytest.raises(ValidationError):
-        RiskFeatureVector(refund_ratio=1.5)
+        RiskFeatureVector.model_validate({"refund_ratio": 1.5})
 
     # Payment attempts < 1
     with pytest.raises(ValidationError):
-        RiskFeatureVector(payment_attempts=0)
+        RiskFeatureVector.model_validate({"payment_attempts": 0})
 
 
 def test_explanation_and_contribution_generation(model: OperationalRiskModel):
