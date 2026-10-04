@@ -297,3 +297,19 @@ class WorkflowRunResponse(BaseModel):
     updated_at: datetime
 
 
+# ==============================================================================
+# Operational Dashboard & Telemetry Schemas (Phase 4 - Deliverable D-16)
+# ==============================================================================
+
+from backend.api.operations_schemas import (
+    ResilienceTelemetry,
+    RiskTelemetry,
+    VerificationTelemetry,
+    PolicyTelemetry,
+    WorkflowStepTelemetry,
+    WorkflowRunDetailResponse,
+    WorkflowRunTelemetry,
+    OperationalSummary,
+)
+
+

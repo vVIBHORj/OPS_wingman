@@ -89,8 +89,8 @@ def _setup_test_order(
     pay_id = uuid.uuid4()
     payment = Payment(
         id=pay_id,
+        payment_reference=f"PAY-{pay_id.hex[:8].upper()}",
         order_id=order.id,
-        customer_id=cust.id,
         amount=amount,
         currency="INR",
         status=PaymentStatus.SUCCESSFUL,
@@ -242,6 +242,7 @@ def test_order_cancellation_reflects_elevated_ml_risk(db_session: Session):
 
     assert run.state == WorkflowState.WAITING_FOR_APPROVAL
     assert run.approval_id is not None
+    assert run.risk_assessment is not None
     assert run.risk_assessment["model_version"] == "v1.0.0-custom"
     assert run.risk_assessment["risk_score"] == 0.76
 

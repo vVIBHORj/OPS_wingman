@@ -22,6 +22,14 @@ from backend.resilience.retry import (
     calculate_backoff_delay,
     retry_executor,
 )
+from backend.resilience.wrapper import (
+    ResilientToolExecutor,
+    resilient_tool_executor,
+    resolve_idempotency_key,
+    resolve_scope,
+    compute_request_hash,
+    is_state_changing,
+)
 
 __all__ = [
     "IdempotencyStatus",
@@ -42,5 +50,11 @@ __all__ = [
     "is_transient_error",
     "calculate_backoff_delay",
     "retry_executor",
+    "ResilientToolExecutor",
+    "resilient_tool_executor",
+    "resolve_idempotency_key",
+    "resolve_scope",
+    "compute_request_hash",
+    "is_state_changing",
 ]
 

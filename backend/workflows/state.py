@@ -75,6 +75,7 @@ class WorkflowRunRecord(BaseModel):
     policy_decisions: List[Dict[str, Any]] = Field(default_factory=list)
     verification_results: List[Dict[str, Any]] = Field(default_factory=list)
     risk_assessment: Optional[Dict[str, Any]] = None
+    resilience_records: List[Dict[str, Any]] = Field(default_factory=list)
     approval_id: Optional[str] = None
     final_response: Optional[str] = None
     error: Optional[str] = None

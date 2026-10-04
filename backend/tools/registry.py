@@ -297,9 +297,11 @@ def datetime_stamp() -> str:
 # Registry Builder
 # ==============================================================================
 
-def create_default_tool_registry() -> ToolRegistry:
+def create_default_tool_registry(
+    resilience_wrapper: Optional[Any] = None,
+) -> ToolRegistry:
     """Builds and returns the canonical Tool Registry loaded with Phase 2 tools."""
-    registry = ToolRegistry()
+    registry = ToolRegistry(resilience_wrapper=resilience_wrapper)
 
     registry.register(ToolDefinition(
         name="get_customer",

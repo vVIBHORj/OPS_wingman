@@ -27,6 +27,7 @@ from backend.api.routers import (
     knowledge_router,
     approvals_router,
     ml_router,
+    operations_router,
 )
 
 
@@ -112,6 +113,7 @@ app.include_router(agent_router)
 app.include_router(knowledge_router)
 app.include_router(approvals_router)
 app.include_router(ml_router)
+app.include_router(operations_router)
 
 
 # ==============================================================================

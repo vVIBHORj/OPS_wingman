@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 import simulator
 from backend.approvals.service import ApprovalService
 from backend.ml import (
+    AnomalyInfo,
     MLRiskService,
+    RiskAssessmentResult,
     RiskBand,
     RiskFeatureVector,
     ml_risk_service,
@@ -24,6 +26,13 @@ from backend.policies.engine import policy_engine
 from backend.policies.schemas import PolicyEvaluationResult
 from backend.rag.schemas import KnowledgeCitation, RetrievalRequest
 from backend.rag.service import RAGService
+from backend.resilience import (
+    IdempotencyService,
+    ResilientToolExecutor,
+    RetryExecutor,
+    idempotency_service as default_idempotency_service,
+    retry_executor as default_retry_executor,
+)
 from backend.tools.base import RiskLevel, ToolRegistry
 from backend.tools.registry import create_default_tool_registry
 from backend.verification import (
@@ -56,6 +65,7 @@ class AgentGraphState(TypedDict, total=False):
     risk_assessment: Optional[Dict[str, Any]]
     policy_decisions: List[Dict[str, Any]]
     verification_results: List[Dict[str, Any]]
+    resilience_records: List[Dict[str, Any]]
     requires_approval: bool
     approval_id: Optional[str]
     final_response: Optional[str]
@@ -72,8 +82,19 @@ class OpsAgent:
         tool_registry: Optional[ToolRegistry] = None,
         verification_service: Optional[StateVerificationService] = None,
         risk_service: Optional[MLRiskService] = None,
+        idempotency_service: Optional[IdempotencyService] = None,
+        retry_executor: Optional[RetryExecutor] = None,
+        resilience_wrapper: Optional[ResilientToolExecutor] = None,
     ) -> None:
-        self.tools = tool_registry or create_default_tool_registry()
+        self.idempotency_service = idempotency_service or default_idempotency_service
+        self.retry_executor = retry_executor or default_retry_executor
+        self.resilience_wrapper = resilience_wrapper or ResilientToolExecutor(
+            idempotency_service=self.idempotency_service,
+            retry_executor=self.retry_executor,
+        )
+        self.tools = tool_registry or create_default_tool_registry(
+            resilience_wrapper=self.resilience_wrapper,
+        )
         self.verification_service = verification_service or state_verification_service
         self.risk_service = risk_service or ml_risk_service
         self.graph = self._build_graph()
@@ -245,6 +266,7 @@ class OpsAgent:
         planned = state.get("planned_tools", [])
         results: Dict[str, Any] = {}
         executed: List[str] = []
+        resilience_records: List[Dict[str, Any]] = list(state.get("resilience_records") or [])
         db = state.get("db")
         run_id = state.get("run_id", "")
 
@@ -260,25 +282,34 @@ class OpsAgent:
                     params["order_id"] = order_id
             elif tool_name == "get_shipment":
                 order_res = results.get("get_order")
-                if order_res and order_res.get("data", {}).get("id"):
-                    params["order_id"] = order_res["data"]["id"]
+                ord_data = (order_res.get("data") or {}) if order_res else {}
+                if ord_data.get("id"):
+                    params["order_id"] = ord_data["id"]
                 elif order_id:
                     params["order_id"] = order_id
             elif tool_name == "get_payment":
                 order_res = results.get("get_order")
-                if order_res and order_res.get("data", {}).get("id"):
-                    params["order_id"] = order_res["data"]["id"]
+                ord_data = (order_res.get("data") or {}) if order_res else {}
+                if ord_data.get("id"):
+                    params["order_id"] = ord_data["id"]
                 elif order_id:
                     params["order_id"] = order_id
 
-            res = self.tools.execute(tool_name, params=params, context={"db": db} if db else None)
+            tool_context = {
+                "db": db,
+                "workflow_id": state.get("workflow_id", run_id),
+                "run_id": run_id,
+            } if db else None
+            res = self.tools.execute(tool_name, params=params, context=tool_context)
             results[tool_name] = res.model_dump()
             executed.append(tool_name)
+            if res.resilience_metadata:
+                resilience_records.append(res.resilience_metadata)
 
             checkpoint_store.add_step(
                 run_id=run_id,
                 step_name=f"execute_tool_{tool_name}",
-                state=WorkflowState.RUNNING,
+                state=WorkflowState.RUNNING if res.success else WorkflowState.FAILED,
                 tool_name=tool_name,
                 input_payload=params,
                 output_payload=res.model_dump(),
@@ -288,6 +319,7 @@ class OpsAgent:
         return {
             "executed_tools": executed,
             "tool_results": results,
+            "resilience_records": resilience_records,
         }
 
     def _node_assess_risk(self, state: AgentGraphState) -> Dict[str, Any]:
@@ -318,20 +350,34 @@ class OpsAgent:
                 risk_res = None
 
         if risk_res is None:
-            # Fallback to feature-vector scoring from in-memory tool results
-            order_amount = float(order_data.get("total_amount", 0.0) or 0.0)
-            delivery_delay_hours = (
-                24.0
-                if (shipment_data.get("delay_reason") or shipment_data.get("status") == "DELAYED")
-                else 0.0
-            )
-            failed_payments = 1 if payment_data.get("status") == "FAILED" else 0
-            features = RiskFeatureVector(
-                order_amount=max(0.0, order_amount),
-                delivery_delay_hours=delivery_delay_hours,
-                failed_payment_count=failed_payments,
-            )
-            risk_res = self.risk_service.assess_risk(features)
+            try:
+                # Fallback to feature-vector scoring from in-memory tool results
+                order_amount = float(order_data.get("total_amount", 0.0) or 0.0)
+                delivery_delay_hours = (
+                    24.0
+                    if (shipment_data.get("delay_reason") or shipment_data.get("status") == "DELAYED")
+                    else 0.0
+                )
+                failed_payments = 1 if payment_data.get("status") == "FAILED" else 0
+                features = RiskFeatureVector(
+                    order_amount=max(0.0, order_amount),
+                    delivery_delay_hours=delivery_delay_hours,
+                    failed_payment_count=failed_payments,
+                )
+                risk_res = self.risk_service.assess_risk(features)
+            except Exception as exc:
+                # Safe defined fallback if ML risk assessment completely fails
+                features = RiskFeatureVector()
+                risk_res = RiskAssessmentResult(
+                    model_version="v1.0.0-fallback",
+                    risk_score=0.5,
+                    risk_band=RiskBand.MEDIUM,
+                    is_high_risk=False,
+                    features=features,
+                    contributions=[],
+                    top_risk_factors=[f"ML scoring fallback: {exc}"],
+                    anomaly=AnomalyInfo(is_anomaly=False, anomaly_score=0.0, anomaly_flags=[]),
+                )
 
         risk_dict = risk_res.model_dump(mode="json")
         anomaly_flags = list(risk_res.anomaly.anomaly_flags) if risk_res.anomaly else []
@@ -584,9 +630,13 @@ class OpsAgent:
             None,
         )
 
+        err_details: Optional[str] = None
         if ver_failure:
             err_details = ", ".join(ver_failure.get("discrepancies", [])) or ver_failure.get("error") or ver_failure.get("status")
             response = f"Action execution failed post-action state verification ({ver_failure.get('status')}): {err_details}"
+            final_state = WorkflowState.FAILED
+        elif state.get("workflow_state") == WorkflowState.FAILED.value and state.get("error"):
+            response = f"Workflow execution failed: {state.get('error')}"
             final_state = WorkflowState.FAILED
         elif not order_info and not state.get("order_number"):
             response = "Thank you for reaching out to OpsWingman. Could you please provide your Order Number (e.g., ORD-YYYYMMDD-XXXXXX) so I can retrieve your details?"
@@ -682,6 +732,8 @@ class OpsAgent:
         if run_record:
             run_record.final_response = response
             run_record.state = final_state
+            if final_state == WorkflowState.FAILED:
+                run_record.error = state.get("error") or (err_details if ver_failure else None)
             run_record.intent = intent
             run_record.extracted_entities = state.get("extracted_entities", {})
             run_record.proposed_actions = [StructuredAction(**a) for a in state.get("proposed_actions", [])]
@@ -689,6 +741,7 @@ class OpsAgent:
             run_record.policy_decisions = state.get("policy_decisions", [])
             run_record.verification_results = state.get("verification_results", [])
             run_record.risk_assessment = state.get("risk_assessment")
+            run_record.resilience_records = state.get("resilience_records", [])
             run_record.approval_id = state.get("approval_id")
             if order_info:
                 run_record.order_id = order_info.get("id")
@@ -742,6 +795,7 @@ class OpsAgent:
             "policy_decisions": [],
             "verification_results": [],
             "risk_assessment": None,
+            "resilience_records": [],
             "requires_approval": False,
             "approval_id": None,
             "workflow_state": WorkflowState.CREATED.value,
@@ -806,8 +860,16 @@ class OpsAgent:
                 res = self.tools.execute(
                     "cancel_order",
                     params={"order_id": order_id, "reason": action.reason},
-                    context={"db": db, "approved": True},
+                    context={
+                        "db": db,
+                        "approved": True,
+                        "workflow_id": run_record.workflow_id,
+                        "run_id": run_id,
+                        "action_id": "cancel_order",
+                    },
                 )
+                if res.resilience_metadata:
+                    run_record.resilience_records.append(res.resilience_metadata)
 
                 checkpoint_store.add_step(
                     run_id=run_id,
@@ -871,8 +933,17 @@ class OpsAgent:
                 res = self.tools.execute(
                     "request_refund",
                     params={"order_id": order_id, "reason": action.reason},
-                    context={"db": db, "approved": True},
+                    context={
+                        "db": db,
+                        "approved": True,
+                        "workflow_id": run_record.workflow_id,
+                        "run_id": run_id,
+                        "action_id": "request_refund",
+                    },
                 )
+                if res.resilience_metadata:
+                    run_record.resilience_records.append(res.resilience_metadata)
+
                 checkpoint_store.add_step(
                     run_id=run_id,
                     step_name="execute_approved_action_request_refund",
@@ -922,8 +993,17 @@ class OpsAgent:
                 res = self.tools.execute(
                     "create_ticket",
                     params=action.parameters,
-                    context={"db": db, "approved": True},
+                    context={
+                        "db": db,
+                        "approved": True,
+                        "workflow_id": run_record.workflow_id,
+                        "run_id": run_id,
+                        "action_id": "create_ticket",
+                    },
                 )
+                if res.resilience_metadata:
+                    run_record.resilience_records.append(res.resilience_metadata)
+
                 checkpoint_store.add_step(
                     run_id=run_id,
                     step_name="execute_approved_action_create_ticket",
