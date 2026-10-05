@@ -24,9 +24,18 @@ from scripts.ops import cmd_check_config, cmd_migration_status
 # 1. Configuration & Security Validation Tests
 # ==============================================================================
 
+@pytest.fixture(autouse=True)
+def isolate_env(monkeypatch):
+    """Isolates configuration unit tests from ambient environment variables and .env overrides."""
+    monkeypatch.delenv("DEBUG", raising=False)
+    monkeypatch.delenv("APP_SECRET_KEY", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("BACKEND_CORS_ORIGINS", raising=False)
+
+
 def test_settings_development_defaults():
     """Verifies that development settings load with safe default parameters."""
-    cfg = Settings(environment="development")
+    cfg = Settings(environment="development", debug=False)
     assert cfg.environment == "development"
     assert cfg.backend_port == 8000
     assert cfg.backend_cors_origins == ["http://localhost:3000"]
@@ -54,12 +63,14 @@ def test_production_settings_rejects_insecure_secrets():
     with pytest.raises(ValueError, match="APP_SECRET_KEY must be set to a secure"):
         Settings(
             environment="production",
+            debug=False,
             app_secret_key="change-this-insecure-secret-key-for-local-dev-only",
         )
 
     with pytest.raises(ValueError, match="APP_SECRET_KEY must be set to a secure"):
         Settings(
             environment="production",
+            debug=False,
             app_secret_key="short-secret",
         )
 

@@ -83,3 +83,8 @@ test-results/
 .data/
 
 OpsWingman_Project_Master_Blueprint.docx
+blueprint_dump.txt
+blueprint_end_scenarios.txt
+blueprint_full.txt
+blueprint_phase4_details.txt
+blueprint_system.reqs.txt

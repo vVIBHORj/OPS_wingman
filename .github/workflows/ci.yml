@@ -1,0 +1,113 @@
+name: CI Quality Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    name: Code Quality & Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opswingman
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d opswingman"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install -r backend/requirements-dev.txt
+
+      - name: Repository Hygiene Check
+        run: |
+          git diff --check
+
+      - name: Static Type Checking
+        run: |
+          npx pyright backend tests database simulator scripts
+
+      - name: Run Pytest Test Suite
+        run: |
+          python -m pytest -q
+
+      - name: Database Migration Validation
+        env:
+          DATABASE_SYNC_URL: postgresql://postgres:postgres@localhost:5432/opswingman
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/opswingman
+        run: |
+          alembic upgrade head
+          alembic current
+          alembic heads
+          alembic check
+
+      - name: Configuration Validation (Development Defaults)
+        run: |
+          python scripts/ops.py check-config --env development
+
+      - name: Configuration Validation (Production Secret Enforcement)
+        run: |
+          echo "Testing production configuration rejection for insecure default secrets..."
+          if python scripts/ops.py check-config --env production; then
+            echo "ERROR: Production check should have rejected default secrets!"
+            exit 1
+          fi
+          echo "Production rejection verified successfully."
+
+          echo "Testing valid production configuration..."
+          APP_SECRET_KEY="ci-placeholder-valid-secret-key-at-least-16-chars" \
+          DEBUG=false \
+          python scripts/ops.py check-config --env production
+
+  container-validation:
+    name: Container Build & Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Production Docker Image
+        run: |
+          docker build -f docker/Dockerfile.backend -t opswingman-backend:ci .
+
+      - name: Container Startup & Liveness Smoke Test
+        run: |
+          docker run -d --name opswingman-ci-smoke -p 8000:8000 opswingman-backend:ci
+          sleep 5
+          curl -f http://localhost:8000/health
+          curl -f http://localhost:8000/health/live
+          docker rm -f opswingman-ci-smoke

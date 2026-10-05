@@ -352,6 +352,48 @@ pytest tests/unit
 
 ---
 
+## 🚦 Continuous Integration & Quality Gates
+
+Every push and pull request is automatically validated through the GitHub Actions CI pipeline (`.github/workflows/ci.yml`) against seven strict quality gates:
+
+1. **Repository Hygiene**: `git diff --check` ensures no trailing whitespace or corrupt line-endings.
+2. **Static Type Checking**: `npx pyright backend tests database simulator scripts` strictly enforces zero errors and type safety across all subsystems.
+3. **Automated Test Suite**: `python -m pytest -q` executes all unit, integration, and resilience tests (262+ tests).
+4. **Database Migration Consistency**: Runs `alembic upgrade head`, `alembic current`, `alembic heads`, and `alembic check` against a live PostgreSQL 16 container to verify schema synchronicity.
+5. **Configuration & Security Validation**:
+   - Validates development settings via `python scripts/ops.py check-config --env development`.
+   - Validates that production mode (`--env production`) strictly rejects default secrets or active debug modes.
+6. **Production Container Build**: Builds the hardened non-root container image (`docker/Dockerfile.backend`).
+7. **Container Smoke Test**: Boots the production container in isolation and verifies HTTP 200 responses from `/health` and `/health/live`.
+
+### Reproducing CI Checks Locally
+
+Run the following suite of commands to match the CI pipeline locally:
+
+```bash
+# 1. Format and hygiene check
+git diff --check
+
+# 2. Static typecheck
+npx pyright backend tests database simulator scripts
+
+# 3. Full test suite
+python -m pytest -q
+
+# 4. Alembic migration verification (requires local postgres)
+alembic current
+alembic heads
+alembic check
+
+# 5. Configuration validation
+python scripts/ops.py check-config --env development
+
+# 6. Container packaging validation
+docker build -f docker/Dockerfile.backend -t opswingman-backend:local .
+```
+
+---
+
 ## 📚 Documentation Links
 - [Architecture Foundation](file:///architecture/foundation.md)
 - [Local Development Guide](file:///docs/development.md)
