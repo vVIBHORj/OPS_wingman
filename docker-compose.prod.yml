@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: opswingman-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be provided}
+      POSTGRES_DB: ${POSTGRES_DB:-opswingman}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-opswingman}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    image: valkey/valkey:7.2
+    container_name: opswingman-prod-valkey
+    restart: always
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+    volumes:
+      - valkey_prod_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: opswingman-prod-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?APP_SECRET_KEY must be provided}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-opswingman}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-opswingman}
+      VALKEY_URL: redis://valkey:6379/0
+      AUTO_MIGRATE: "true"
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["http://localhost:3000"]}
+    volumes:
+      - checkpoints_prod_data:/app/.data/checkpoints
+
+volumes:
+  postgres_prod_data:
+  valkey_prod_data:
+  checkpoints_prod_data:

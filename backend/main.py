@@ -4,12 +4,17 @@ OpsWingman - Backend Application Entry Point (Phase 1.3 Operational REST API)
 Exposes the deterministic Business Simulator and operational domain via FastAPI REST endpoints.
 """
 
+import logging
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
+from backend.config import get_settings
+from database.session import SessionLocal, dispose_engines
 from simulator.exceptions import (
     EntityNotFoundError,
     InvalidStateTransitionError,
@@ -31,26 +36,52 @@ from backend.api.routers import (
     audit_router,
 )
 
+logger = logging.getLogger("opswingman.api")
+settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup lifecycle hook
+    # Startup lifecycle hook: verify database connectivity
+    try:
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+        logger.info("Database connectivity check succeeded during startup.")
+    except Exception as exc:
+        logger.warning("Database connectivity check failed during startup: %s", exc)
+
     yield
-    # Shutdown lifecycle hook
+
+    # Shutdown lifecycle hook: cleanly dispose all connection pools
+    logger.info("Shutting down OpsWingman API: disposing database engine pools.")
+    try:
+        dispose_engines()
+    except Exception as exc:
+        logger.warning("Error disposing database pools: %s", exc)
 
 
 app = FastAPI(
-    title="OpsWingman API",
+    title=settings.app_name,
     description="Deterministic runtime & Intelligent Operations Platform for modern businesses",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
 )
+
+# Correlation ID Middleware (X-Request-ID)
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = req_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=settings.backend_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -136,10 +167,48 @@ async def root() -> Dict[str, Any]:
 
 @app.get("/health", tags=["Monitoring"])
 async def health_check() -> Dict[str, Any]:
-    """Health check endpoint for container orchestration and liveness checks."""
+    """Basic health check endpoint for liveness verification."""
     return {
         "status": "healthy",
+        "environment": settings.environment,
         "services": {
             "api": "ok",
         },
     }
+
+
+@app.get("/health/live", tags=["Monitoring"])
+async def liveness_probe() -> Dict[str, Any]:
+    """Kubernetes/Container liveness probe to verify process is alive."""
+    return {"status": "alive"}
+
+
+@app.get("/health/ready", tags=["Monitoring"])
+@app.get("/ready", tags=["Monitoring"])
+async def readiness_probe():
+    """Readiness probe checking database dependency health before serving traffic."""
+    db_status = "ok"
+    error_msg = None
+    try:
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+    except Exception as exc:
+        db_status = "unavailable"
+        error_msg = str(exc)
+        logger.error("Readiness probe database check failed: %s", exc)
+
+    is_ready = (db_status == "ok")
+    status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if is_ready else "unready",
+            "environment": settings.environment,
+            "services": {
+                "api": "ok",
+                "database": db_status,
+            },
+            "error": error_msg,
+        },
+    )

@@ -7,12 +7,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system runtime & build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Create unprivileged application user
+RUN useradd -m -u 1000 -s /bin/bash opsuser && \
+    mkdir -p /app/.data/checkpoints && \
+    chown -R opsuser:opsuser /app
 
 # Copy dependency definitions
 COPY backend/requirements.txt /app/backend/requirements.txt
@@ -21,13 +26,27 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --upgrade pip && \
     pip install -r /app/backend/requirements.txt
 
-# Copy source code
+# Copy application configuration and migrations
+COPY alembic.ini /app/alembic.ini
+COPY docker/entrypoint.sh /app/docker/entrypoint.sh
+RUN chmod +x /app/docker/entrypoint.sh
+
+# Copy application source code
 COPY backend /app/backend
 COPY database /app/database
 COPY simulator /app/simulator
 COPY workers /app/workers
 COPY integrations /app/integrations
 
+# Adjust permissions for non-root runtime
+RUN chown -R opsuser:opsuser /app
+
+USER opsuser
+
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

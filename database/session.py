@@ -12,15 +12,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/opswingman",
-)
-
-DATABASE_SYNC_URL = os.getenv(
-    "DATABASE_SYNC_URL",
-    "postgresql://postgres:postgres@localhost:5432/opswingman",
-)
+try:
+    from backend.config import get_settings
+    _settings = get_settings()
+    DATABASE_URL = _settings.database_url
+    DATABASE_SYNC_URL = _settings.database_sync_url
+    _POOL_SIZE = _settings.database_pool_size
+    _MAX_OVERFLOW = _settings.database_max_overflow
+    _POOL_TIMEOUT = _settings.database_pool_timeout
+    _SQL_ECHO = _settings.sql_echo
+except Exception:
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/opswingman",
+    )
+    DATABASE_SYNC_URL = os.getenv(
+        "DATABASE_SYNC_URL",
+        "postgresql://postgres:postgres@localhost:5432/opswingman",
+    )
+    _POOL_SIZE = 10
+    _MAX_OVERFLOW = 20
+    _POOL_TIMEOUT = 30
+    _SQL_ECHO = os.getenv("SQL_ECHO", "false").lower() == "true"
 
 _sync_engine = None
 _SessionLocal = None
@@ -35,7 +48,10 @@ def get_sync_engine():
         _sync_engine = create_engine(
             DATABASE_SYNC_URL,
             pool_pre_ping=True,
-            echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+            pool_size=_POOL_SIZE,
+            max_overflow=_MAX_OVERFLOW,
+            pool_timeout=_POOL_TIMEOUT,
+            echo=_SQL_ECHO,
         )
     return _sync_engine
 
@@ -65,9 +81,24 @@ def get_async_engine():
         _async_engine = create_async_engine(
             DATABASE_URL,
             pool_pre_ping=True,
-            echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+            pool_size=_POOL_SIZE,
+            max_overflow=_MAX_OVERFLOW,
+            pool_timeout=_POOL_TIMEOUT,
+            echo=_SQL_ECHO,
         )
     return _async_engine
+
+
+def dispose_engines():
+    """Cleanly disposes all cached connection pools upon application shutdown."""
+    global _sync_engine, _async_engine
+    if _sync_engine is not None:
+        _sync_engine.dispose()
+        _sync_engine = None
+    if _async_engine is not None:
+        # Sync disposal of underlying pool
+        _async_engine.sync_engine.dispose()
+        _async_engine = None
 
 
 def get_async_sessionmaker():
