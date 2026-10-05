@@ -15,6 +15,7 @@ from backend.resilience import (
     idempotency_service as default_idempotency_service,
     resilient_tool_executor as default_resilient_tool_executor,
 )
+from backend.audit import AuditService, audit_service as default_audit_service
 from backend.tools.base import ToolDefinition, ToolRegistry
 from backend.tools.registry import create_default_tool_registry
 from backend.verification import StateVerificationService, state_verification_service
@@ -33,6 +34,7 @@ class OpsAgentService:
         idempotency_service: Optional[IdempotencyService] = None,
         retry_executor: Optional[RetryExecutor] = None,
         resilience_wrapper: Optional[ResilientToolExecutor] = None,
+        audit_service: Optional[AuditService] = None,
     ) -> None:
         self.tool_registry = tool_registry or create_default_tool_registry()
         self.verification_service = verification_service or state_verification_service
@@ -40,6 +42,7 @@ class OpsAgentService:
         self.idempotency_service = idempotency_service or default_idempotency_service
         self.retry_executor = retry_executor
         self.resilience_wrapper = resilience_wrapper or default_resilient_tool_executor
+        self.audit_service = audit_service or default_audit_service
         self.agent = OpsAgent(
             tool_registry=self.tool_registry,
             verification_service=self.verification_service,
@@ -47,6 +50,7 @@ class OpsAgentService:
             idempotency_service=self.idempotency_service,
             retry_executor=self.retry_executor,
             resilience_wrapper=self.resilience_wrapper,
+            audit_service=self.audit_service,
         )
 
     def execute_workflow(

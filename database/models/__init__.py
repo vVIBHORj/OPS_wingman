@@ -15,6 +15,7 @@ from database.models.enums import (
     DocumentStatus,
     ApprovalStatus,
     IdempotencyStatus,
+    AuditEventType,
 )
 from database.models.event import EventType, DomainEvent
 from database.models.customer import Customer
@@ -26,6 +27,7 @@ from database.models.ticket import Ticket
 from database.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from database.models.approval import ApprovalRecord
 from database.models.idempotency import IdempotencyRecord
+from database.models.audit import AuditEventRecord
 
 __all__ = [
     "Base",
@@ -43,6 +45,7 @@ __all__ = [
     "DocumentStatus",
     "ApprovalStatus",
     "IdempotencyStatus",
+    "AuditEventType",
     "EventType",
     "DomainEvent",
     "Customer",
@@ -56,5 +59,6 @@ __all__ = [
     "KnowledgeChunk",
     "ApprovalRecord",
     "IdempotencyRecord",
+    "AuditEventRecord",
 ]
 

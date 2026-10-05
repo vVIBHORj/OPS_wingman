@@ -14,6 +14,12 @@ from sqlalchemy.orm import Session
 
 import simulator
 from backend.approvals.service import ApprovalService
+from backend.audit import (
+    AuditService,
+    audit_service as default_audit_service,
+    AuditEventType,
+    AuditEventCreate,
+)
 from backend.ml import (
     AnomalyInfo,
     MLRiskService,
@@ -85,6 +91,7 @@ class OpsAgent:
         idempotency_service: Optional[IdempotencyService] = None,
         retry_executor: Optional[RetryExecutor] = None,
         resilience_wrapper: Optional[ResilientToolExecutor] = None,
+        audit_service: Optional[AuditService] = None,
     ) -> None:
         self.idempotency_service = idempotency_service or default_idempotency_service
         self.retry_executor = retry_executor or default_retry_executor
@@ -97,6 +104,7 @@ class OpsAgent:
         )
         self.verification_service = verification_service or state_verification_service
         self.risk_service = risk_service or ml_risk_service
+        self.audit_service = audit_service or default_audit_service
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -173,6 +181,20 @@ class OpsAgent:
             state=WorkflowState.RUNNING,
             input_payload={"input_text": text},
             output_payload={"intent": intent, "extracted_entities": entities},
+        )
+
+        self.audit_service.record_event(
+            AuditEventCreate(
+                run_id=run_id,
+                event_type=AuditEventType.INTENT_INTERPRETED,
+                actor="OpsAgent",
+                workflow_state=WorkflowState.RUNNING.value,
+                entity_type="order" if entities.get("order_number") else None,
+                entity_id=entities.get("order_number") or entities.get("entity_uuid"),
+                tool_result_summary={"intent": intent, "extracted_entities": entities},
+                success=True,
+            ),
+            session=state.get("db"),
         )
 
         return {
@@ -256,6 +278,18 @@ class OpsAgent:
             output_payload={"planned_tools": planned, "proposed_actions": proposed_actions},
         )
 
+        self.audit_service.record_event(
+            AuditEventCreate(
+                run_id=run_id,
+                event_type=AuditEventType.TOOL_PLANNED,
+                actor="OpsAgent",
+                workflow_state=WorkflowState.RUNNING.value,
+                metadata_provenance={"planned_tools": planned, "proposed_actions": proposed_actions},
+                success=True,
+            ),
+            session=state.get("db"),
+        )
+
         return {
             "planned_tools": planned,
             "proposed_actions": proposed_actions,
@@ -314,6 +348,18 @@ class OpsAgent:
                 input_payload=params,
                 output_payload=res.model_dump(),
                 error=res.error,
+            )
+
+            self.audit_service.record_tool_execution(
+                run_id=run_id,
+                tool_name=tool_name,
+                arguments=params,
+                result=res.data if res.success else None,
+                success=res.success,
+                error=res.error,
+                workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                resilience_metadata=res.resilience_metadata,
+                session=db,
             )
 
         return {
@@ -406,6 +452,14 @@ class OpsAgent:
             },
         )
 
+        self.audit_service.record_risk_assessment(
+            run_id=run_id,
+            risk_assessment=risk_dict,
+            operation="assess_risk",
+            workflow_state=WorkflowState.RUNNING.value,
+            session=state.get("db"),
+        )
+
         return {
             "risk_assessment": risk_dict,
             "proposed_actions": proposed_actions,
@@ -464,6 +518,13 @@ class OpsAgent:
                 citations=citations,
             )
             policy_decisions.append(eval_result.model_dump())
+            self.audit_service.record_policy_decision(
+                run_id=run_id,
+                policy_decision=eval_result.model_dump(),
+                operation=struct_action.action,
+                workflow_state=WorkflowState.RUNNING.value,
+                session=db,
+            )
 
             if eval_result.requires_approval:
                 requires_approval = True
@@ -479,6 +540,29 @@ class OpsAgent:
                         target_entity=order_data.get("order_number") or state.get("order_number"),
                     )
                     approval_id = str(record.id)
+                self.audit_service.record_approval(
+                    run_id=run_id,
+                    approval_id=approval_id or "pending_approval",
+                    action=struct_action.action,
+                    status="PENDING",
+                    reason=eval_result.decision,
+                    workflow_state=WorkflowState.WAITING_FOR_APPROVAL.value,
+                    session=db,
+                )
+
+        if not proposed_actions:
+            self.audit_service.record_policy_decision(
+                run_id=run_id,
+                policy_decision={
+                    "policy_id": "POL-INQ-001",
+                    "allowed": True,
+                    "decision": "ALLOWED",
+                    "reason": "Read-only inquiry permitted under standard data policy.",
+                },
+                operation="evaluate_policy",
+                workflow_state=WorkflowState.RUNNING.value,
+                session=db,
+            )
 
         wf_state = (
             WorkflowState.WAITING_FOR_APPROVAL
@@ -538,6 +622,13 @@ class OpsAgent:
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
                     verification_results.append(ver_dump)
+                    self.audit_service.record_verification(
+                        run_id=run_id,
+                        verification_result=ver_dump,
+                        operation=tool_name,
+                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        session=db,
+                    )
                     if not ver_res.verified:
                         errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
 
@@ -553,6 +644,13 @@ class OpsAgent:
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
                     verification_results.append(ver_dump)
+                    self.audit_service.record_verification(
+                        run_id=run_id,
+                        verification_result=ver_dump,
+                        operation=tool_name,
+                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        session=db,
+                    )
                     if not ver_res.verified:
                         errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
 
@@ -569,6 +667,13 @@ class OpsAgent:
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
                     verification_results.append(ver_dump)
+                    self.audit_service.record_verification(
+                        run_id=run_id,
+                        verification_result=ver_dump,
+                        operation=tool_name,
+                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        session=db,
+                    )
                     if not ver_res.verified:
                         errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
 
@@ -610,6 +715,7 @@ class OpsAgent:
         requires_approval = state.get("requires_approval", False)
         approval_id = state.get("approval_id")
         run_id = state.get("run_id", "")
+        db: Optional[Session] = state.get("db")
 
         # Format citation references for transparency
         citations = state.get("retrieved_citations", [])
@@ -748,6 +854,24 @@ class OpsAgent:
                 run_record.customer_id = order_info.get("customer_id")
             checkpoint_store.save(run_record)
 
+        # Audit workflow completion or failure
+        if final_state == WorkflowState.FAILED:
+            self.audit_service.record_workflow_failure(
+                run_id=run_id,
+                workflow_state=final_state.value,
+                error=state.get("error") or (err_details if ver_failure else response),
+                final_response=response,
+                session=db,
+            )
+        elif final_state == WorkflowState.COMPLETED:
+            self.audit_service.record_workflow_completion(
+                run_id=run_id,
+                workflow_state=final_state.value,
+                final_response=response,
+                metadata={"intent": intent, "order_number": state.get("order_number")},
+                session=db,
+            )
+
         return {
             "final_response": response,
             "workflow_state": final_state.value,
@@ -779,6 +903,19 @@ class OpsAgent:
             state=WorkflowState.CREATED,
         )
         checkpoint_store.save(run_record)
+
+        # Audit incoming request
+        self.audit_service.record_event(
+            AuditEventCreate(
+                run_id=r_id,
+                event_type=AuditEventType.REQUEST_RECEIVED,
+                actor="user",
+                workflow_state=WorkflowState.CREATED.value,
+                tool_arguments={"input_text": input_text, "order_number": order_number, "customer_id": customer_id},
+                metadata_provenance={"workflow_id": wf_id},
+            ),
+            session=db,
+        )
 
         # Initial graph state
         initial_state: AgentGraphState = {
@@ -831,6 +968,20 @@ class OpsAgent:
 
         if not approved:
             rej_response = f"Action rejected: {reason or 'Approval denied by operator.'}"
+            self.audit_service.record_approval(
+                run_id=run_id,
+                approval_status="REJECTED",
+                actor="supervisor",
+                decision_reason=reason,
+                session=db,
+            )
+            self.audit_service.record_workflow_failure(
+                run_id=run_id,
+                workflow_state=WorkflowState.CANCELLED.value,
+                error=rej_response,
+                final_response=rej_response,
+                session=db,
+            )
             checkpoint_store.add_step(
                 run_id=run_id,
                 step_name="resume_approval_decision",
@@ -841,6 +992,14 @@ class OpsAgent:
             run_record.state = WorkflowState.CANCELLED
             run_record.final_response = rej_response
             return checkpoint_store.save(run_record)
+
+        self.audit_service.record_approval(
+            run_id=run_id,
+            approval_status="APPROVED",
+            actor="supervisor",
+            decision_reason=reason,
+            session=db,
+        )
 
         # Process approved actions
         for action in run_record.proposed_actions:
@@ -871,6 +1030,16 @@ class OpsAgent:
                 if res.resilience_metadata:
                     run_record.resilience_records.append(res.resilience_metadata)
 
+                self.audit_service.record_tool_execution(
+                    run_id=run_id,
+                    tool_name="cancel_order",
+                    arguments={"order_id": order_id, "reason": action.reason},
+                    result=res.model_dump(),
+                    resilience_metadata=res.resilience_metadata,
+                    workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                    session=db,
+                )
+
                 checkpoint_store.add_step(
                     run_id=run_id,
                     step_name="execute_approved_action_cancel_order",
@@ -885,6 +1054,13 @@ class OpsAgent:
                     run_record.state = WorkflowState.FAILED
                     run_record.error = res.error
                     run_record.final_response = f"Failed to execute approved cancellation: {res.error}"
+                    self.audit_service.record_workflow_failure(
+                        run_id=run_id,
+                        workflow_state=WorkflowState.FAILED.value,
+                        error=res.error or "Failed to execute approved cancellation",
+                        final_response=run_record.final_response,
+                        session=db,
+                    )
                     return checkpoint_store.save(run_record)
 
                 # Post-action state verification
@@ -899,6 +1075,14 @@ class OpsAgent:
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
                     run_record.verification_results.append(ver_dump)
+
+                    self.audit_service.record_verification(
+                        run_id=run_id,
+                        verification_result=ver_dump,
+                        operation="cancel_order",
+                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        session=db,
+                    )
 
                     checkpoint_store.add_step(
                         run_id=run_id,
@@ -916,6 +1100,13 @@ class OpsAgent:
                         err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
                         run_record.error = err_msg
                         run_record.final_response = f"Approved cancellation executed but state verification failed ({ver_res.status.value}): {err_details}"
+                        self.audit_service.record_workflow_failure(
+                            run_id=run_id,
+                            workflow_state=WorkflowState.FAILED.value,
+                            error=err_msg,
+                            final_response=run_record.final_response,
+                            session=db,
+                        )
                         return checkpoint_store.save(run_record)
 
             elif action.action == "request_refund":
@@ -944,6 +1135,16 @@ class OpsAgent:
                 if res.resilience_metadata:
                     run_record.resilience_records.append(res.resilience_metadata)
 
+                self.audit_service.record_tool_execution(
+                    run_id=run_id,
+                    tool_name="request_refund",
+                    arguments={"order_id": order_id, "reason": action.reason},
+                    result=res.model_dump(),
+                    resilience_metadata=res.resilience_metadata,
+                    workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                    session=db,
+                )
+
                 checkpoint_store.add_step(
                     run_id=run_id,
                     step_name="execute_approved_action_request_refund",
@@ -957,6 +1158,13 @@ class OpsAgent:
                     run_record.state = WorkflowState.FAILED
                     run_record.error = res.error
                     run_record.final_response = f"Failed to execute approved refund: {res.error}"
+                    self.audit_service.record_workflow_failure(
+                        run_id=run_id,
+                        workflow_state=WorkflowState.FAILED.value,
+                        error=res.error or "Failed to execute approved refund",
+                        final_response=run_record.final_response,
+                        session=db,
+                    )
                     return checkpoint_store.save(run_record)
 
                 # Post-action state verification
@@ -970,6 +1178,14 @@ class OpsAgent:
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
                     run_record.verification_results.append(ver_dump)
+
+                    self.audit_service.record_verification(
+                        run_id=run_id,
+                        verification_result=ver_dump,
+                        operation="request_refund",
+                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        session=db,
+                    )
 
                     checkpoint_store.add_step(
                         run_id=run_id,
@@ -987,6 +1203,13 @@ class OpsAgent:
                         err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
                         run_record.error = err_msg
                         run_record.final_response = f"Approved refund executed but state verification failed ({ver_res.status.value}): {err_details}"
+                        self.audit_service.record_workflow_failure(
+                            run_id=run_id,
+                            workflow_state=WorkflowState.FAILED.value,
+                            error=err_msg,
+                            final_response=run_record.final_response,
+                            session=db,
+                        )
                         return checkpoint_store.save(run_record)
 
             elif action.action == "create_ticket":
@@ -1004,6 +1227,16 @@ class OpsAgent:
                 if res.resilience_metadata:
                     run_record.resilience_records.append(res.resilience_metadata)
 
+                self.audit_service.record_tool_execution(
+                    run_id=run_id,
+                    tool_name="create_ticket",
+                    arguments=action.parameters,
+                    result=res.model_dump(),
+                    resilience_metadata=res.resilience_metadata,
+                    workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                    session=db,
+                )
+
                 checkpoint_store.add_step(
                     run_id=run_id,
                     step_name="execute_approved_action_create_ticket",
@@ -1017,6 +1250,13 @@ class OpsAgent:
                     run_record.state = WorkflowState.FAILED
                     run_record.error = res.error
                     run_record.final_response = f"Failed to execute approved ticket creation: {res.error}"
+                    self.audit_service.record_workflow_failure(
+                        run_id=run_id,
+                        workflow_state=WorkflowState.FAILED.value,
+                        error=res.error or "Failed to execute approved ticket creation",
+                        final_response=run_record.final_response,
+                        session=db,
+                    )
                     return checkpoint_store.save(run_record)
 
                 if db and res.data:
@@ -1032,6 +1272,14 @@ class OpsAgent:
                         ver_res = self.verification_service.verify(session=db, request=ver_req)
                         ver_dump = ver_res.model_dump(mode="json")
                         run_record.verification_results.append(ver_dump)
+
+                        self.audit_service.record_verification(
+                            run_id=run_id,
+                            verification_result=ver_dump,
+                            operation="create_ticket",
+                            workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                            session=db,
+                        )
 
                         checkpoint_store.add_step(
                             run_id=run_id,
@@ -1049,6 +1297,13 @@ class OpsAgent:
                             err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
                             run_record.error = err_msg
                             run_record.final_response = f"Approved ticket creation executed but state verification failed ({ver_res.status.value}): {err_details}"
+                            self.audit_service.record_workflow_failure(
+                                run_id=run_id,
+                                workflow_state=WorkflowState.FAILED.value,
+                                error=err_msg,
+                                final_response=run_record.final_response,
+                                session=db,
+                            )
                             return checkpoint_store.save(run_record)
 
         succ_response = "Approved actions executed successfully. Order operations completed."
@@ -1061,6 +1316,13 @@ class OpsAgent:
         )
         run_record.state = WorkflowState.COMPLETED
         run_record.final_response = succ_response
+        self.audit_service.record_workflow_completion(
+            run_id=run_id,
+            workflow_state=WorkflowState.COMPLETED.value,
+            final_response=succ_response,
+            metadata={"resumed": True, "approved": True},
+            session=db,
+        )
         return checkpoint_store.save(run_record)
 
     def resume_approved_action(

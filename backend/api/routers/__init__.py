@@ -13,6 +13,7 @@ from backend.api.routers.knowledge import router as knowledge_router
 from backend.api.routers.approvals import router as approvals_router
 from backend.api.routers.ml import router as ml_router
 from backend.api.routers.operations import router as operations_router
+from backend.api.routers.audit import router as audit_router
 
 __all__ = [
     "customers_router",
@@ -26,4 +27,5 @@ __all__ = [
     "approvals_router",
     "ml_router",
     "operations_router",
+    "audit_router",
 ]
