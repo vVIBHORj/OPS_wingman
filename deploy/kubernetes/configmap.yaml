@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opswingman-backend-config
+  namespace: opswingman
+  labels:
+    app.kubernetes.io/name: opswingman-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: opswingman-platform
+data:
+  APP_NAME: "OpsWingman"
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  LOG_LEVEL: "INFO"
+  BACKEND_HOST: "0.0.0.0"
+  BACKEND_PORT: "8000"
+  BACKEND_CORS_ORIGINS: '["https://app.opswingman.io"]'
+  DOCS_ENABLED: "false"
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_OVERFLOW: "10"
+  DATABASE_POOL_TIMEOUT: "30"
+  VALKEY_HOST: "opswingman-valkey"
+  VALKEY_PORT: "6379"
+  VALKEY_URL: "redis://opswingman-valkey:6379/0"
+  AUTO_MIGRATE: "true"
+  OTEL_SERVICE_NAME: "opswingman-backend"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.opswingman.svc.cluster.local:4318"
+  LANGFUSE_HOST: "http://opswingman-langfuse.opswingman.svc.cluster.local:3000"
+  LANGFUSE_ENABLE_TELEMETRY: "false"

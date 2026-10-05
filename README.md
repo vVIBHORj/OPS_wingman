@@ -394,6 +394,67 @@ docker build -f docker/Dockerfile.backend -t opswingman-backend:local .
 
 ---
 
+## ☸️ Production Deployment (Kubernetes)
+
+Cloud-agnostic, production-grade Kubernetes manifests are provided under [`deploy/kubernetes/`](file:///deploy/kubernetes/):
+
+- `namespace.yaml`: Isolated `opswingman` namespace.
+- `configmap.yaml`: Non-sensitive runtime configuration (`DEBUG=false`, `ENVIRONMENT=production`, CORS, logging).
+- `secret.yaml`: Secrets template for `APP_SECRET_KEY`, database credentials, and external tokens.
+- `deployment.yaml`: RollingUpdate Deployment (2 replicas, non-root security context, resource limits, `/health/live` liveness probe, `/health/ready` readiness probe).
+- `service.yaml`: Internal `ClusterIP` Service exposing port 8000.
+- `ingress.yaml`: Cloud-agnostic Ingress routing traffic to `opswingman-backend-service`.
+- `kustomization.yaml`: Kustomize composition for one-command lifecycle operations.
+
+### 1. Prerequisites
+- A running Kubernetes cluster (v1.26+)
+- `kubectl` configured with cluster access
+- Ingress controller (e.g. `ingress-nginx`, Traefik, AWS ALB Controller, or GCP GKE Ingress)
+- External or separately provisioned **PostgreSQL 16 (with `pgvector`)** and **Valkey / Redis** instances
+
+### 2. Configure Secrets
+Edit [`deploy/kubernetes/secret.yaml`](file:///deploy/kubernetes/secret.yaml) with your production credentials before deploying:
+```yaml
+stringData:
+  APP_SECRET_KEY: "your-cryptographically-secure-secret-min-16-chars"
+  DATABASE_URL: "postgresql+asyncpg://user:password@managed-db.internal:5432/opswingman"
+  DATABASE_SYNC_URL: "postgresql://user:password@managed-db.internal:5432/opswingman"
+```
+
+### 3. Deploy to Cluster
+Apply all manifests using Kustomize:
+```bash
+kubectl apply -k deploy/kubernetes/
+```
+*(Or apply individually: `kubectl apply -f deploy/kubernetes/`)*
+
+### 4. Monitor Rollout & Pod Health
+```bash
+# Check deployment rollout
+kubectl rollout status deployment/opswingman-backend -n opswingman
+
+# Check pod status and probe health
+kubectl get pods -n opswingman -l app.kubernetes.io/name=opswingman-backend
+```
+
+### 5. Verify Health Probes Locally via Port Forward
+```bash
+kubectl port-forward svc/opswingman-backend-service 8000:8000 -n opswingman
+
+# Liveness probe
+curl http://localhost:8000/health/live
+
+# Readiness probe (verifies active DB connectivity)
+curl http://localhost:8000/health/ready
+```
+
+### 6. Teardown
+```bash
+kubectl delete -k deploy/kubernetes/
+```
+
+---
+
 ## 📚 Documentation Links
 - [Architecture Foundation](file:///architecture/foundation.md)
 - [Local Development Guide](file:///docs/development.md)

@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opswingman-backend-ingress
+  namespace: opswingman
+  labels:
+    app.kubernetes.io/name: opswingman-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: opswingman-platform
+  annotations:
+    ingress.class: "nginx"
+spec:
+  rules:
+    - host: api.opswingman.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: opswingman-backend-service
+                port:
+                  number: 8000
