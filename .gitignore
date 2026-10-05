@@ -1,5 +1,10 @@
 # Operating System Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 desktop.ini
 *.tmp
@@ -8,9 +13,16 @@ desktop.ini
 .env
 .env.local
 .env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.pem
 *.key
 *.cert
+*.crt
+*.pfx
+*.p12
+id_rsa*
 secrets/
 credentials/
 
@@ -41,9 +53,12 @@ wheels/
 *.egg
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+nosetests.xml
+coverage.xml
 
 # Node.js & Frontend
 frontend/node_modules/
@@ -57,13 +72,22 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .npm/
+.pnpm-store/
 
-# Docker & Local Data Volumes
+# Docker, Databases & Local Data Volumes
 .docker-data/
 postgres_data/
 valkey_data/
 langfuse_data/
 mailpit_data/
+*.sqlite
+*.sqlite3
+*.db
+.data/
+
+# Logs
+logs/
+*.log
 
 # IDE & Editors
 .vscode/
@@ -80,11 +104,9 @@ evals/reports/*.json
 !evals/reports/.gitkeep
 playwright-report/
 test-results/
-.data/
 
+# Project Blueprints & Raw Planning Dumps
 OpsWingman_Project_Master_Blueprint.docx
-blueprint_dump.txt
-blueprint_end_scenarios.txt
-blueprint_full.txt
-blueprint_phase4_details.txt
-blueprint_system.reqs.txt
+*.docx
+*.doc
+blueprint*
