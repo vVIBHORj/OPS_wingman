@@ -455,6 +455,130 @@ kubectl delete -k deploy/kubernetes/
 
 ---
 
+## 🚀 Production Image Release & Deployment
+
+OpsWingman utilizes a provider-neutral GitHub Actions release workflow (`.github/workflows/release.yml`) for container image publishing and automated Kubernetes rolling updates.
+
+### 1. Required GitHub Configuration
+
+#### Repository Variables (`Settings -> Secrets and variables -> Actions -> Variables`)
+- `REGISTRY`: Target container registry hostname (e.g. `ghcr.io`, `docker.io`, `<account_id>.dkr.ecr.<region>.amazonaws.com`). Defaults to `ghcr.io`.
+- `IMAGE_NAME`: Repository image namespace/path (e.g. `myorg/opswingman-backend`). Defaults to the GitHub repository name.
+
+#### Repository Secrets (`Settings -> Secrets and variables -> Actions -> Secrets`)
+- `REGISTRY_USERNAME`: Username or robot account with container push permissions.
+- `REGISTRY_PASSWORD`: Access token, personal access token (PAT), or password.
+- `KUBECONFIG`: (Optional) Base64 or plaintext kubeconfig containing cluster credentials for continuous delivery.
+
+### 2. How to Perform a Release
+
+#### Method A: Git Version Tagging (Recommended)
+Tagging a commit on `main` triggers image building, tagging, and deployment:
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+#### Method B: Manual Workflow Dispatch
+1. Navigate to **Actions** -> **Production Release & Deployment**.
+2. Click **Run workflow**.
+3. Optionally specify a custom `image_tag` or enable `deploy_to_k8s: true`.
+
+### 3. Image Naming & Tagging Strategy
+Every build generates immutable OCI tags to prevent accidental overwrites:
+- **Immutable Git SHA**: `<REGISTRY>/<IMAGE_NAME>:sha-<SHORT_SHA>` (e.g., `ghcr.io/myorg/opswingman-backend:sha-7b3e1a0`)
+- **Release Version**: `<REGISTRY>/<IMAGE_NAME>:v0.1.0` (when triggered via version tag)
+- **Latest**: `<REGISTRY>/<IMAGE_NAME>:latest` (only on semantic version tags)
+
+All images include standard OCI provenance labels (`org.opencontainers.image.revision`, `org.opencontainers.image.version`, `org.opencontainers.image.source`).
+
+### 4. Production Approval & Security Controls
+- **GitHub Environment Protection**: The `deploy-production` job is bound to the `production` environment. Production deployments require required reviewer approval before executing.
+- **Pull Request Isolation**: The release and deployment workflow cannot be triggered by pull requests (`pull_request` events are explicitly excluded).
+- **Dry-Run Validation Gate**: Manifests are automatically validated with `scripts/ops.py validate-release` and `kubectl kustomize` before any container build starts.
+
+### 5. Kubernetes Dry Run & Manual Deployment
+
+#### Validate Manifests Locally
+```bash
+# Validate release readiness
+python scripts/ops.py validate-release
+
+# Preview rendered manifests
+kubectl kustomize deploy/kubernetes/
+```
+
+#### Deploy a Specific Immutable Image
+```bash
+# Set deployment to a specific immutable tag
+kubectl set image deployment/opswingman-backend backend=ghcr.io/myorg/opswingman-backend:sha-7b3e1a0 -n opswingman
+
+# Monitor rolling update progress
+kubectl rollout status deployment/opswingman-backend -n opswingman --timeout=300s
+```
+
+### 6. Emergency Rollback Procedure
+If an issue occurs after deploying to production, execute a zero-downtime rolling rollback:
+```bash
+# 1. View previous rollout revisions
+kubectl rollout history deployment/opswingman-backend -n opswingman
+
+# 2. Undo deployment to previous stable revision
+kubectl rollout undo deployment/opswingman-backend -n opswingman
+
+# 3. Monitor rollback progress until healthy
+kubectl rollout status deployment/opswingman-backend -n opswingman
+```
+
+---
+
+## 📋 Production Deployment Checklist & Preflight Verification
+
+Before initiating a production rollout to real infrastructure, verify the following three operational pillars:
+
+### 1. Infrastructure Requirements
+- [ ] **PostgreSQL 16**: Live database instance with `pgvector` extension enabled.
+- [ ] **Valkey / Redis**: High-availability key-value cache and async queue instance.
+- [ ] **Kubernetes Cluster**: Production Kubernetes cluster (v1.26+) accessible via kubectl.
+- [ ] **Ingress Controller**: Active ingress controller (e.g. `ingress-nginx`, Traefik, AWS ALB).
+- [ ] **DNS & TLS**: Public/private DNS records pointing to the ingress controller with valid TLS certificates.
+- [ ] **Container Registry**: Authenticated OCI container registry (GHCR, ECR, GCR, Docker Hub).
+
+### 2. Secrets Provisioning
+- [ ] `APP_SECRET_KEY`: Cryptographically secure secret key (min 16 characters).
+- [ ] `DATABASE_URL`: Connection string for async SQLAlchemy (`postgresql+asyncpg://...`).
+- [ ] `DATABASE_SYNC_URL`: Connection string for sync Alembic migrations (`postgresql://...`).
+- [ ] `REGISTRY_USERNAME` & `REGISTRY_PASSWORD`: CI/CD robot credentials for container publishing.
+- [ ] `KUBECONFIG`: Cluster deployment authentication secret in GitHub Secrets.
+- [ ] `LANGFUSE_PUBLIC_KEY` & `LANGFUSE_SECRET_KEY`: (Optional) Telemetry credentials if tracing is active.
+
+### 3. Deployment & Verification Execution
+1. **Run Production Preflight**:
+   ```bash
+   python scripts/ops.py preflight
+   ```
+   Ensures 0 `FAIL` items across manifests, security contexts, probes, and secret hygiene.
+2. **Build and Tag Production Container**:
+   Build immutable image tagged with Git SHA (`sha-<SHORT_SHA>`) and semantic release tag (`vX.Y.Z`).
+3. **Publish to Registry**:
+   Push immutable image to container registry.
+4. **Approve Production Environment**:
+   Approve deployment via GitHub Actions Environment reviewer gate.
+5. **Apply Kustomize Manifests**:
+   Deploy updated image via `kubectl apply -k deploy/kubernetes/`.
+6. **Verify Rolling Rollout**:
+   `kubectl rollout status deployment/opswingman-backend -n opswingman --timeout=300s`
+7. **Verify Post-Deployment Endpoints**:
+   - `GET /health/live` -> 200 `{"status": "alive"}`
+   - `GET /health/ready` -> 200 `{"status": "ready", "services": {"api": "ok", "database": "ok"}}`
+   - `GET /risk/model-info` -> 200 (Model metadata and operational risk features)
+8. **Verify Container Logs**:
+   `kubectl logs -n opswingman -l app.kubernetes.io/name=opswingman-backend --tail=100`
+9. **Emergency Rollback Ready**:
+   Confirm ability to execute `kubectl rollout undo deployment/opswingman-backend -n opswingman`.
+
+---
+
 ## 📚 Documentation Links
 - [Architecture Foundation](file:///architecture/foundation.md)
 - [Local Development Guide](file:///docs/development.md)

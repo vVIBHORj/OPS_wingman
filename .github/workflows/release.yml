@@ -1,0 +1,189 @@
+name: Production Release & Deployment
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Optional custom image tag override (defaults to Git SHA)'
+        required: false
+        type: string
+        default: ''
+      deploy_to_k8s:
+        description: 'Deploy to production Kubernetes cluster after build'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-k8s:
+    name: Validate Manifests & Dry Run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate Release Readiness
+        run: python scripts/ops.py validate-release
+
+      - name: Production Preflight Check
+        run: python scripts/ops.py preflight
+
+      - name: Test Kustomize Manifest Rendering
+        run: |
+          kubectl kustomize deploy/kubernetes/ > /dev/null
+          echo "Kustomize dry-run rendered successfully."
+
+      - name: Test Kustomize Dynamic Image Override
+        run: |
+          python -c "
+          import yaml
+          with open('deploy/kubernetes/kustomization.yaml') as f:
+              k = yaml.safe_load(f)
+          k['images'][0]['newName'] = 'ghcr.io/test/opswingman-backend'
+          k['images'][0]['newTag'] = 'sha-test1234'
+          with open('deploy/kubernetes/kustomization.yaml', 'w') as f:
+              yaml.dump(k, f)
+          "
+          RENDERED=$(kubectl kustomize deploy/kubernetes/)
+          echo "$RENDERED" | grep "ghcr.io/test/opswingman-backend:sha-test1234"
+          echo "Kustomize dynamic image override verified successfully."
+
+  build-and-push:
+    name: Build & Push Production Image
+    needs: validate-k8s
+    runs-on: ubuntu-latest
+    outputs:
+      immutable_image: ${{ steps.image-meta.outputs.immutable_image }}
+      image_tag: ${{ steps.image-meta.outputs.primary_tag }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine Registry and Image Metadata
+        id: image-meta
+        run: |
+          REGISTRY="${{ vars.REGISTRY || 'ghcr.io' }}"
+          IMAGE_NAME="${{ vars.IMAGE_NAME || github.repository }}"
+          IMAGE_BASE="${REGISTRY}/${IMAGE_NAME}"
+          # Force lowercase
+          IMAGE_BASE=$(echo "${IMAGE_BASE}" | tr '[:upper:]' '[:lower:]')
+
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMMUTABLE_TAG="sha-${SHORT_SHA}"
+
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            PRIMARY_TAG="${{ github.event.inputs.image_tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            PRIMARY_TAG="${GITHUB_REF_NAME}"
+          else
+            PRIMARY_TAG="${IMMUTABLE_TAG}"
+          fi
+
+          TAGS="${IMAGE_BASE}:${IMMUTABLE_TAG},${IMAGE_BASE}:${PRIMARY_TAG}"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAGS="${TAGS},${IMAGE_BASE}:latest"
+          fi
+
+          IMMUTABLE_IMAGE="${IMAGE_BASE}:${IMMUTABLE_TAG}"
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "immutable_image=${IMMUTABLE_IMAGE}" >> $GITHUB_OUTPUT
+          echo "primary_tag=${PRIMARY_TAG}" >> $GITHUB_OUTPUT
+          echo "image_base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Log in to Container Registry
+        if: ${{ secrets.REGISTRY_PASSWORD != '' && secrets.REGISTRY_USERNAME != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.REGISTRY || 'ghcr.io' }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.backend
+          push: ${{ secrets.REGISTRY_PASSWORD != '' && secrets.REGISTRY_USERNAME != '' }}
+          tags: ${{ steps.image-meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=OpsWingman Backend
+            org.opencontainers.image.description=Production backend for OpsWingman operational platform
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.image-meta.outputs.primary_tag }}
+
+  deploy-production:
+    name: Deploy to Kubernetes Production
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_to_k8s == true)
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure Kubeconfig
+        if: ${{ secrets.KUBECONFIG != '' }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Apply Immutable Image via Kustomize
+        run: |
+          IMMUTABLE_IMAGE="${{ needs.build-and-push.outputs.immutable_image }}"
+          echo "Setting deployment image to: ${IMMUTABLE_IMAGE}"
+          python -c "
+          import yaml
+          with open('deploy/kubernetes/kustomization.yaml') as f:
+              k = yaml.safe_load(f)
+          # Split image into repository and tag
+          img = '${IMMUTABLE_IMAGE}'
+          if ':' in img:
+              repo, tag = img.rsplit(':', 1)
+          else:
+              repo, tag = img, 'latest'
+          k['images'][0]['newName'] = repo
+          k['images'][0]['newTag'] = tag
+          with open('deploy/kubernetes/kustomization.yaml', 'w') as f:
+              yaml.dump(k, f)
+          "
+
+      - name: Verify Preflight Gate Before Deployment
+        run: python scripts/ops.py preflight
+
+      - name: Deploy Kubernetes Manifests
+        if: ${{ secrets.KUBECONFIG != '' }}
+        run: |
+          kubectl apply -k deploy/kubernetes/
+
+      - name: Verify Rollout Status
+        if: ${{ secrets.KUBECONFIG != '' }}
+        run: |
+          kubectl rollout status deployment/opswingman-backend -n opswingman --timeout=300s
+          kubectl get deployment opswingman-backend -n opswingman

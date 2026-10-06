@@ -90,6 +90,10 @@ jobs:
           DEBUG=false \
           python scripts/ops.py check-config --env production
 
+      - name: Production Deployment Preflight Check
+        run: |
+          python scripts/ops.py preflight
+
   container-validation:
     name: Container Build & Smoke Test
     runs-on: ubuntu-latest
