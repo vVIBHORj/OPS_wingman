@@ -25,6 +25,11 @@ desktop.ini
 id_rsa*
 secrets/
 credentials/
+kubeconfig*
+*.kubeconfig
+.kube/
+*.token
+*.secret
 
 # Python
 __pycache__/
@@ -57,6 +62,8 @@ wheels/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.pyright/
+.cache/
 nosetests.xml
 coverage.xml
 

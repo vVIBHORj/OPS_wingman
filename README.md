@@ -354,17 +354,18 @@ pytest tests/unit
 
 ## 🚦 Continuous Integration & Quality Gates
 
-Every push and pull request is automatically validated through the GitHub Actions CI pipeline (`.github/workflows/ci.yml`) against seven strict quality gates:
+Every push and pull request is automatically validated through the GitHub Actions CI pipeline (`.github/workflows/ci.yml`) against eight strict quality gates:
 
 1. **Repository Hygiene**: `git diff --check` ensures no trailing whitespace or corrupt line-endings.
 2. **Static Type Checking**: `npx pyright backend tests database simulator scripts` strictly enforces zero errors and type safety across all subsystems.
-3. **Automated Test Suite**: `python -m pytest -q` executes all unit, integration, and resilience tests (262+ tests).
+3. **Automated Test Suite**: `python -m pytest -q` executes all unit, integration, and resilience tests (301+ tests).
 4. **Database Migration Consistency**: Runs `alembic upgrade head`, `alembic current`, `alembic heads`, and `alembic check` against a live PostgreSQL 16 container to verify schema synchronicity.
 5. **Configuration & Security Validation**:
    - Validates development settings via `python scripts/ops.py check-config --env development`.
    - Validates that production mode (`--env production`) strictly rejects default secrets or active debug modes.
-6. **Production Container Build**: Builds the hardened non-root container image (`docker/Dockerfile.backend`).
-7. **Container Smoke Test**: Boots the production container in isolation and verifies HTTP 200 responses from `/health` and `/health/live`.
+6. **Production & Staging Preflight Validation**: `python scripts/ops.py preflight` verifies 21 strict validation gates including container security, manifest health probes, staging overlay packaging, migration strategy, and secret hygiene.
+7. **Production Container Build**: Builds the hardened non-root container image (`docker/Dockerfile.backend`).
+8. **Container Smoke Test**: Boots the production container in isolation and verifies HTTP 200 responses from `/health` and `/health/live`.
 
 ### Reproducing CI Checks Locally
 
@@ -388,7 +389,10 @@ alembic check
 # 5. Configuration validation
 python scripts/ops.py check-config --env development
 
-# 6. Container packaging validation
+# 6. Production preflight validation
+python scripts/ops.py preflight
+
+# 7. Container packaging validation
 docker build -f docker/Dockerfile.backend -t opswingman-backend:local .
 ```
 
@@ -403,8 +407,10 @@ Cloud-agnostic, production-grade Kubernetes manifests are provided under [`deplo
 - `secret.yaml`: Secrets template for `APP_SECRET_KEY`, database credentials, and external tokens.
 - `deployment.yaml`: RollingUpdate Deployment (2 replicas, non-root security context, resource limits, `/health/live` liveness probe, `/health/ready` readiness probe).
 - `service.yaml`: Internal `ClusterIP` Service exposing port 8000.
-- `ingress.yaml`: Cloud-agnostic Ingress routing traffic to `opswingman-backend-service`.
+- `ingress.yaml`: Cloud-agnostic Ingress routing traffic to `opswingman-backend-service` with `spec.ingressClassName: nginx`.
+- `migration-job.yaml`: Controlled Kubernetes Job for schema migrations (`opswingman-db-migrate`).
 - `kustomization.yaml`: Kustomize composition for one-command lifecycle operations.
+- `overlays/staging/`: Staging Kustomize overlay configured for isolated namespace `opswingman-staging`.
 
 ### 1. Prerequisites
 - A running Kubernetes cluster (v1.26+)
@@ -413,12 +419,12 @@ Cloud-agnostic, production-grade Kubernetes manifests are provided under [`deplo
 - External or separately provisioned **PostgreSQL 16 (with `pgvector`)** and **Valkey / Redis** instances
 
 ### 2. Configure Secrets
-Edit [`deploy/kubernetes/secret.yaml`](file:///deploy/kubernetes/secret.yaml) with your production credentials before deploying:
+Populate [`deploy/kubernetes/secret.yaml`](file:///deploy/kubernetes/secret.yaml) with production credentials retrieved securely from your Secret Manager (e.g. HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager, or GitHub Secrets):
 ```yaml
 stringData:
-  APP_SECRET_KEY: "your-cryptographically-secure-secret-min-16-chars"
-  DATABASE_URL: "postgresql+asyncpg://user:password@managed-db.internal:5432/opswingman"
-  DATABASE_SYNC_URL: "postgresql://user:password@managed-db.internal:5432/opswingman"
+  APP_SECRET_KEY: "<cryptographically-secure-key-min-32-chars-from-secret-manager>"
+  DATABASE_URL: "postgresql+asyncpg://<user>:<password>@<db-host>:5432/opswingman"
+  DATABASE_SYNC_URL: "postgresql://<user>:<password>@<db-host>:5432/opswingman"
 ```
 
 ### 3. Deploy to Cluster
