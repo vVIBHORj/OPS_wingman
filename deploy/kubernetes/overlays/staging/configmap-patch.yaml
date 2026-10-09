@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opswingman-backend-config
+  namespace: opswingman
+data:
+  ENVIRONMENT: "staging"
+  BACKEND_CORS_ORIGINS: '["https://staging.opswingman.io"]'
+  DOCS_ENABLED: "true"
+  AUTO_MIGRATE: "false"
+  WAIT_FOR_MIGRATION: "true"
+  LOG_LEVEL: "INFO"

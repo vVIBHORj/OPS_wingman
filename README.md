@@ -455,6 +455,78 @@ kubectl delete -k deploy/kubernetes/
 
 ---
 
+## 🧪 Staging Deployment & Hardening (Kubernetes)
+
+OpsWingman provides a dedicated Kustomize staging overlay under [`deploy/kubernetes/overlays/staging/`](file:///deploy/kubernetes/overlays/staging/) designed for pre-production integration testing in an isolated namespace.
+
+### 1. Staging Architecture & Environment Separation
+- **Isolated Namespace**: Runs in `opswingman-staging` (ensures zero resource collision with production).
+- **Environment**: Sets `ENVIRONMENT=staging` with interactive OpenAPI documentation enabled (`DOCS_ENABLED=true`).
+- **CORS Configuration**: Restricts browser origins to `["https://staging.opswingman.io"]`.
+- **Modern Ingress**: Configures standard `spec.ingressClassName: nginx` targeting host `api-staging.opswingman.example.com`.
+- **TLS Provisioning**: Add a `tls:` block to [`deploy/kubernetes/overlays/staging/ingress-patch.yaml`](file:///deploy/kubernetes/overlays/staging/ingress-patch.yaml) or attach `cert-manager.io/cluster-issuer: letsencrypt-staging` annotation once cluster certificates are provisioned.
+
+### 2. Migration Concurrency Resolution
+- **Multi-Replica Safety**: In multi-replica Kubernetes environments, `AUTO_MIGRATE` is set to `"false"` in `configmap.yaml` to prevent concurrent startup race conditions.
+- **Controlled Migration Job**: Schema migrations are executed once via the dedicated Kubernetes Job [`deploy/kubernetes/migration-job.yaml`](file:///deploy/kubernetes/migration-job.yaml) or via `python scripts/ops.py migrate` before rollout.
+- **Schema Readiness Polling**: Pods enforce `WAIT_FOR_MIGRATION="true"`, waiting for database schema readiness at Alembic head via `python scripts/ops.py check-migration-ready --timeout 60` before booting the API process.
+- **Local Dev Preserved**: Local single-container development (`docker-compose.yml`) defaults to `AUTO_MIGRATE=true` for zero-friction iteration.
+- **Migration & Rollback Implications**:
+  - Migrations must follow the expand/contract pattern and remain backwards-compatible with running pods.
+  - Rolling back application pods (`kubectl rollout undo`) reverts container binaries but does not down-migrate the database. If a migration added a column or index, the previous application version continues to operate safely against the expanded schema.
+  - Destructive schema rollbacks require planned maintenance and running `alembic downgrade <target_rev>`.
+
+### 3. Staging Deployment Sequence
+
+#### Manual Deployment via Kustomize
+```bash
+# 1. Ensure staging namespace and secrets exist
+kubectl create namespace opswingman-staging --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic opswingman-backend-secrets \
+  --namespace opswingman-staging \
+  --from-literal=APP_SECRET_KEY="staging-insecure-key-for-testing-only" \
+  --from-literal=DATABASE_URL="postgresql+asyncpg://postgres:secret@staging-postgres:5432/opswingman" \
+  --from-literal=DATABASE_SYNC_URL="postgresql://postgres:secret@staging-postgres:5432/opswingman" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. Run schema migration job to head
+kubectl delete job opswingman-db-migrate -n opswingman-staging --ignore-not-found
+kubectl apply -f deploy/kubernetes/migration-job.yaml -n opswingman-staging
+kubectl wait --for=condition=complete job/opswingman-db-migrate -n opswingman-staging --timeout=180s
+
+# 3. Apply staging Kustomize overlay
+kubectl apply -k deploy/kubernetes/overlays/staging/
+
+# 4. Monitor rollout status
+kubectl rollout status deployment/opswingman-backend -n opswingman-staging --timeout=300s
+```
+
+#### Automated Deployment via GitHub Actions
+A dedicated staging workflow is provided at [`.github/workflows/deploy-staging.yml`](file:///.github/workflows/deploy-staging.yml):
+- Triggered manually via **Actions** -> **Staging Deployment** (`workflow_dispatch`).
+- Gated by GitHub Environment `staging`.
+- Deploys immutable SHA container tags without triggering production deployment.
+- Executes the migration job prior to updating deployment pods.
+
+### 4. Health Verification & Rollback
+```bash
+# Verify pod and probe health
+kubectl get pods -n opswingman-staging -l app.kubernetes.io/name=opswingman-backend
+
+# Port-forward to query endpoints
+kubectl port-forward svc/opswingman-backend-service 8000:8000 -n opswingman-staging
+curl -s http://localhost:8000/health/live
+curl -s http://localhost:8000/health/ready
+curl -s http://localhost:8000/risk/model-info
+
+# Emergency rollback
+kubectl rollout history deployment/opswingman-backend -n opswingman-staging
+kubectl rollout undo deployment/opswingman-backend -n opswingman-staging
+kubectl rollout status deployment/opswingman-backend -n opswingman-staging
+```
+
+---
+
 ## 🚀 Production Image Release & Deployment
 
 OpsWingman utilizes a provider-neutral GitHub Actions release workflow (`.github/workflows/release.yml`) for container image publishing and automated Kubernetes rolling updates.

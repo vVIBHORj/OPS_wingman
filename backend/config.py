@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=20, description="Max overflow connections allowed beyond pool_size")
     database_pool_timeout: int = Field(default=30, description="Seconds to wait before timing out on connection checkout")
     sql_echo: bool = Field(default=False, description="Log raw SQL statements")
+    auto_migrate: bool = Field(default=True, description="Run database migrations automatically on startup")
+    wait_for_migration: bool = Field(default=False, description="Wait for database schema to reach head before serving traffic")
+    migration_wait_timeout: int = Field(default=60, description="Seconds to wait for schema readiness")
 
     # Cache & Queue
     valkey_host: str = Field(default="localhost", description="Valkey/Redis hostname")

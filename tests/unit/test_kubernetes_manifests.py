@@ -79,7 +79,9 @@ def test_configmap_production_settings():
     assert data["DEBUG"] == "false"
     assert data["BACKEND_PORT"] == "8000"
     assert data["VALKEY_HOST"] == "opswingman-valkey"
-    assert data["AUTO_MIGRATE"] == "true"
+    assert data["AUTO_MIGRATE"] == "false"
+    assert data["WAIT_FOR_MIGRATION"] == "true"
+    assert data["MIGRATION_WAIT_TIMEOUT"] == "60"
 
 
 def test_secret_template_no_real_credentials():
@@ -218,6 +220,7 @@ def test_ingress_routing():
     assert ingress["apiVersion"] == "networking.k8s.io/v1"
     assert ingress["kind"] == "Ingress"
     assert ingress["metadata"]["name"] == "opswingman-backend-ingress"
+    assert ingress["spec"]["ingressClassName"] == "nginx"
 
     rules = ingress["spec"]["rules"]
     assert len(rules) >= 1

@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opswingman-db-migrate
+  namespace: opswingman
+  labels:
+    app.kubernetes.io/name: opswingman-db-migrate
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: opswingman-platform
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opswingman-db-migrate
+        app.kubernetes.io/component: migration
+        app.kubernetes.io/part-of: opswingman-platform
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: migrate
+          image: opswingman/backend:v0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["python", "scripts/ops.py", "migrate"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          envFrom:
+            - configMapRef:
+                name: opswingman-backend-config
+            - secretRef:
+                name: opswingman-backend-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

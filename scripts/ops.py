@@ -106,6 +106,58 @@ def cmd_migration_status(args: argparse.Namespace) -> int:
         return 1
 
 
+def check_migration_ready(timeout: int = 60, repo_root: Optional[Path] = None) -> bool:
+    """Checks whether the database schema matches Alembic head revision."""
+    import time
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy import create_engine
+    from backend.config import get_settings
+
+    root = repo_root or REPO_ROOT
+    poll_interval = 2.0
+    start_time = time.time()
+
+    settings = get_settings()
+    sync_url = settings.database_sync_url
+
+    print(f"[MIGRATION-READY] Verifying database schema is at Alembic head (timeout: {timeout}s)...")
+    alembic_cfg = Config(str(root / "alembic.ini"))
+    script = ScriptDirectory.from_config(alembic_cfg)
+    expected_heads = set(script.get_heads())
+
+    while True:
+        try:
+            engine = create_engine(sync_url, pool_pre_ping=True)
+            with engine.connect() as conn:
+                context = MigrationContext.configure(conn)
+                current_rev = context.get_current_revision()
+            engine.dispose()
+
+            if current_rev and current_rev in expected_heads:
+                print(f"[MIGRATION-READY] OK: Database is at head revision '{current_rev}'.")
+                return True
+            else:
+                print(f"[MIGRATION-READY] Current revision is '{current_rev}', expected head in {expected_heads}.")
+        except Exception as exc:
+            print(f"[MIGRATION-READY] Database connection check: {exc}")
+
+        elapsed = time.time() - start_time
+        if elapsed >= timeout:
+            print(f"[MIGRATION-READY] FAIL: Schema readiness check timed out after {timeout}s.", file=sys.stderr)
+            return False
+
+        time.sleep(poll_interval)
+
+
+def cmd_check_migration_ready(args: argparse.Namespace) -> int:
+    """CLI handler for checking migration readiness."""
+    timeout = getattr(args, "timeout", 60)
+    ok = check_migration_ready(timeout=timeout)
+    return 0 if ok else 1
+
+
 def cmd_version(args: argparse.Namespace) -> int:
     """Displays project version and Git commit hash."""
     version = "unknown"
@@ -443,7 +495,56 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
         else:
             record("Immutable Image Config", "FAIL", "Kustomize missing 'images' block for opswingman/backend")
 
-    # 19 & 20. Optional Environment Credentials (WARN if absent, PASS if present)
+    # 19. Staging Overlay Packaging
+    staging_overlay_dir = root / "deploy" / "kubernetes" / "overlays" / "staging"
+    staging_kust = staging_overlay_dir / "kustomization.yaml"
+    if staging_kust.exists():
+        try:
+            res_staging = subprocess.run(
+                ["kubectl", "kustomize", str(staging_overlay_dir)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res_staging.returncode == 0:
+                rendered_output = res_staging.stdout
+                if "name: opswingman-staging" in rendered_output and "ENVIRONMENT: staging" in rendered_output:
+                    record("Staging Overlay", "PASS", "Staging overlay renders cleanly with namespace opswingman-staging and ENVIRONMENT=staging")
+                else:
+                    record("Staging Overlay", "FAIL", "Staging overlay rendered without expected namespace or environment")
+            else:
+                record("Staging Overlay", "FAIL", f"Staging kustomize render failed: {res_staging.stderr.strip()}")
+        except FileNotFoundError:
+            record("Staging Overlay", "WARN", "kubectl not available on PATH; skipping staging overlay render check")
+    else:
+        record("Staging Overlay", "FAIL", "deploy/kubernetes/overlays/staging/kustomization.yaml missing")
+
+    # 20. Migration Concurrency Strategy
+    migration_job_path = root / "deploy" / "kubernetes" / "migration-job.yaml"
+    if migration_job_path.exists():
+        if "configmap.yaml" in manifest_data:
+            cm_data = manifest_data["configmap.yaml"].get("data", {})
+            auto_migrate = cm_data.get("AUTO_MIGRATE")
+            wait_for_migration = cm_data.get("WAIT_FOR_MIGRATION")
+            if auto_migrate == "false" and wait_for_migration == "true":
+                record("Migration Strategy", "PASS", "Multi-replica config disables AUTO_MIGRATE and enables WAIT_FOR_MIGRATION with dedicated migration job")
+            else:
+                record("Migration Strategy", "WARN", f"ConfigMap has AUTO_MIGRATE={auto_migrate}, WAIT_FOR_MIGRATION={wait_for_migration}; recommend AUTO_MIGRATE=false in multi-replica deployments")
+        else:
+            record("Migration Strategy", "PASS", "deploy/kubernetes/migration-job.yaml present")
+    else:
+        record("Migration Strategy", "FAIL", "deploy/kubernetes/migration-job.yaml missing")
+
+    # 21. Ingress Modern Specification
+    if "ingress.yaml" in manifest_data:
+        ing_spec = manifest_data["ingress.yaml"].get("spec", {})
+        ing_class = ing_spec.get("ingressClassName")
+        if ing_class == "nginx":
+            record("Ingress Configuration", "PASS", "Ingress configures standard spec.ingressClassName='nginx'")
+        else:
+            record("Ingress Configuration", "WARN", f"Ingress missing spec.ingressClassName (got: {ing_class})")
+
+    # 22, 23, 24. Optional Environment Credentials (WARN if absent, PASS if present)
     app_secret_env = os.getenv("APP_SECRET_KEY")
     if app_secret_env and len(app_secret_env.strip()) >= 16 and app_secret_env != "change-this-insecure-secret-key-for-local-dev-only":
         record("Production Secret Key", "PASS", "APP_SECRET_KEY configured in environment")
@@ -522,6 +623,10 @@ def main() -> int:
     # validate-release
     subparsers.add_parser("validate-release", help="Validate repository artifacts and manifests for release")
 
+    # check-migration-ready
+    migrate_ready_parser = subparsers.add_parser("check-migration-ready", help="Verify database schema is at head revision")
+    migrate_ready_parser.add_argument("--timeout", type=int, default=60, help="Seconds to wait before timing out (default: 60)")
+
     # preflight
     subparsers.add_parser("preflight", help="Run full production preflight validation")
 
@@ -532,6 +637,7 @@ def main() -> int:
         "check-health": cmd_check_health,
         "migrate": cmd_migrate,
         "migration-status": cmd_migration_status,
+        "check-migration-ready": cmd_check_migration_ready,
         "version": cmd_version,
         "validate-release": cmd_validate_release,
         "preflight": cmd_preflight,

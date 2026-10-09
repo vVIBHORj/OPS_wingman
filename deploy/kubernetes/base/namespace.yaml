@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opswingman
+  labels:
+    app.kubernetes.io/name: opswingman
+    app.kubernetes.io/part-of: opswingman-platform

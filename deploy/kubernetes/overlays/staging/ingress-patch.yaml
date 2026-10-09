@@ -3,16 +3,10 @@ kind: Ingress
 metadata:
   name: opswingman-backend-ingress
   namespace: opswingman
-  labels:
-    app.kubernetes.io/name: opswingman-backend
-    app.kubernetes.io/component: backend
-    app.kubernetes.io/part-of: opswingman-platform
-  annotations:
-    ingress.class: "nginx"
 spec:
   ingressClassName: nginx
   rules:
-    - host: api.opswingman.example.com
+    - host: api-staging.opswingman.example.com
       http:
         paths:
           - path: /
