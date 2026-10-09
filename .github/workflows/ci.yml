@@ -110,7 +110,7 @@ jobs:
 
       - name: Container Startup & Liveness Smoke Test
         run: |
-          docker run -d --name opswingman-ci-smoke -p 8000:8000 opswingman-backend:ci
+          docker run -d --name opswingman-ci-smoke -e AUTO_MIGRATE=false -p 8000:8000 opswingman-backend:ci
           sleep 5
           curl -f http://localhost:8000/health
           curl -f http://localhost:8000/health/live
