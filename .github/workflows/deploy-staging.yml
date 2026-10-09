@@ -8,6 +8,11 @@ name: Staging Deployment
         required: false
         type: string
         default: ''
+      build_image:
+        description: 'Build and push container image before deploying'
+        required: false
+        type: boolean
+        default: true
       skip_migrations:
         description: 'Skip running database schema migrations before rollout'
         required: false
@@ -19,8 +24,63 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build-staging-image:
+    name: Build & Push Staging Image
+    runs-on: ubuntu-latest
+    outputs:
+      target_image: ${{ steps.image-meta.outputs.target_image }}
+      immutable_tag: ${{ steps.image-meta.outputs.immutable_tag }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine Staging Image Tag
+        id: image-meta
+        run: |
+          REGISTRY="${{ vars.REGISTRY || 'ghcr.io' }}"
+          IMAGE_NAME="${{ vars.IMAGE_NAME || github.repository }}"
+          IMAGE_BASE="${REGISTRY}/${IMAGE_NAME}"
+          IMAGE_BASE=$(echo "${IMAGE_BASE}" | tr '[:upper:]' '[:lower:]')
+
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMMUTABLE_TAG="sha-${SHORT_SHA}"
+
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            SELECTED_TAG="${{ github.event.inputs.image_tag }}"
+          else
+            SELECTED_TAG="${IMMUTABLE_TAG}"
+          fi
+
+          TARGET_IMAGE="${IMAGE_BASE}:${SELECTED_TAG}"
+          echo "target_image=${TARGET_IMAGE}" >> $GITHUB_OUTPUT
+          echo "immutable_tag=${IMMUTABLE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Log in to Container Registry
+        if: ${{ secrets.REGISTRY_PASSWORD != '' && secrets.REGISTRY_USERNAME != '' && github.event.inputs.build_image != false }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.REGISTRY || 'ghcr.io' }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and Push Staging Image
+        if: ${{ github.event.inputs.build_image != false }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.backend
+          push: ${{ secrets.REGISTRY_PASSWORD != '' && secrets.REGISTRY_USERNAME != '' }}
+          tags: ${{ steps.image-meta.outputs.target_image }}
+          labels: |
+            org.opencontainers.image.title=OpsWingman Backend (Staging)
+            org.opencontainers.image.revision=${{ github.sha }}
+
   deploy-staging:
     name: Deploy to Kubernetes Staging
+    needs: build-staging-image
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -45,30 +105,9 @@ jobs:
           echo "${{ secrets.KUBECONFIG_STAGING || secrets.KUBECONFIG }}" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-      - name: Determine Staging Image Tag
-        id: image-tag
+      - name: Configure Staging Kustomize Image Override
         run: |
-          REGISTRY="${{ vars.REGISTRY || 'ghcr.io' }}"
-          IMAGE_NAME="${{ vars.IMAGE_NAME || github.repository }}"
-          IMAGE_BASE="${REGISTRY}/${IMAGE_NAME}"
-          IMAGE_BASE=$(echo "${IMAGE_BASE}" | tr '[:upper:]' '[:lower:]')
-
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          IMMUTABLE_TAG="sha-${SHORT_SHA}"
-
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            SELECTED_TAG="${{ github.event.inputs.image_tag }}"
-          else
-            SELECTED_TAG="${IMMUTABLE_TAG}"
-          fi
-
-          TARGET_IMAGE="${IMAGE_BASE}:${SELECTED_TAG}"
-          echo "target_image=${TARGET_IMAGE}" >> $GITHUB_OUTPUT
-          echo "immutable_tag=${IMMUTABLE_TAG}" >> $GITHUB_OUTPUT
-
-      - name: Set Staging Image in Kustomize Overlay
-        run: |
-          TARGET_IMAGE="${{ steps.image-tag.outputs.target_image }}"
+          TARGET_IMAGE="${{ needs.build-staging-image.outputs.target_image }}"
           echo "Configuring staging overlay with target image: ${TARGET_IMAGE}"
           python -c "
           import yaml
@@ -89,13 +128,28 @@ jobs:
           kubectl kustomize deploy/kubernetes/overlays/staging/ > /dev/null
           echo "Staging Kustomize overlay rendered successfully."
 
-      - name: Apply Staging Schema Migrations (Controlled Job)
+      - name: Apply Staging Schema Migrations (Controlled Job with Same Image)
         if: ${{ (secrets.KUBECONFIG_STAGING != '' || secrets.KUBECONFIG != '') && github.event.inputs.skip_migrations != true }}
         run: |
-          echo "Triggering database schema migration job in namespace opswingman-staging..."
+          TARGET_IMAGE="${{ needs.build-staging-image.outputs.target_image }}"
+          echo "Triggering database schema migration job in namespace opswingman-staging using image ${TARGET_IMAGE}..."
           kubectl delete job opswingman-db-migrate -n opswingman-staging --ignore-not-found
+          python -c "
+          import yaml
+          with open('deploy/kubernetes/migration-job.yaml') as f:
+              j = yaml.safe_load(f)
+          j['spec']['template']['spec']['containers'][0]['image'] = '${TARGET_IMAGE}'
+          with open('deploy/kubernetes/migration-job.yaml', 'w') as f:
+              yaml.dump(j, f)
+          "
           kubectl apply -f deploy/kubernetes/migration-job.yaml -n opswingman-staging
-          kubectl wait --for=condition=complete job/opswingman-db-migrate -n opswingman-staging --timeout=180s
+          if kubectl wait --for=condition=complete job/opswingman-db-migrate -n opswingman-staging --timeout=180s; then
+            echo "Database migration completed successfully."
+          else
+            echo "ERROR: Database migration failed. Inspecting logs:"
+            kubectl logs -n opswingman-staging -l app.kubernetes.io/name=opswingman-db-migrate --tail=100
+            exit 1
+          fi
 
       - name: Deploy Staging Overlay
         if: ${{ secrets.KUBECONFIG_STAGING != '' || secrets.KUBECONFIG != '' }}

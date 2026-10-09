@@ -480,24 +480,50 @@ OpsWingman provides a dedicated Kustomize staging overlay under [`deploy/kuberne
 
 #### Manual Deployment via Kustomize
 ```bash
-# 1. Ensure staging namespace and secrets exist
+# 1. Ensure staging namespace exists
 kubectl create namespace opswingman-staging --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. Inject staging secrets securely from environment or secret manager (never hardcode in files)
+# Generate a cryptographically secure staging secret key:
+# STAGING_APP_SECRET_KEY=$(openssl rand -hex 32)
+# Load database credentials from your secure secret store (e.g. Vault, AWS Secrets Manager, 1Password):
 kubectl create secret generic opswingman-backend-secrets \
   --namespace opswingman-staging \
-  --from-literal=APP_SECRET_KEY="staging-insecure-key-for-testing-only" \
-  --from-literal=DATABASE_URL="postgresql+asyncpg://postgres:secret@staging-postgres:5432/opswingman" \
-  --from-literal=DATABASE_SYNC_URL="postgresql://postgres:secret@staging-postgres:5432/opswingman" \
+  --from-literal=APP_SECRET_KEY="${STAGING_APP_SECRET_KEY:?STAGING_APP_SECRET_KEY must be set}" \
+  --from-literal=DATABASE_URL="${STAGING_DATABASE_URL:?STAGING_DATABASE_URL must be set}" \
+  --from-literal=DATABASE_SYNC_URL="${STAGING_DATABASE_SYNC_URL:?STAGING_DATABASE_SYNC_URL must be set}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 2. Run schema migration job to head
+# 3. Define target immutable image (exact same image for migration and deployment)
+export STAGING_IMAGE="ghcr.io/<org>/opswingman-backend:sha-$(git rev-parse --short HEAD)"
+
+# 4. Run schema migration job with the EXACT target image before deploying application
 kubectl delete job opswingman-db-migrate -n opswingman-staging --ignore-not-found
+python -c "
+import yaml
+with open('deploy/kubernetes/migration-job.yaml') as f:
+    j = yaml.safe_load(f)
+j['spec']['template']['spec']['containers'][0]['image'] = '$STAGING_IMAGE'
+with open('deploy/kubernetes/migration-job.yaml', 'w') as f:
+    yaml.dump(j, f)
+"
 kubectl apply -f deploy/kubernetes/migration-job.yaml -n opswingman-staging
 kubectl wait --for=condition=complete job/opswingman-db-migrate -n opswingman-staging --timeout=180s
 
-# 3. Apply staging Kustomize overlay
+# 5. Apply staging Kustomize overlay with image override
+python -c "
+import yaml
+with open('deploy/kubernetes/overlays/staging/kustomization.yaml') as f:
+    k = yaml.safe_load(f)
+repo, tag = '$STAGING_IMAGE'.rsplit(':', 1)
+k['images'][0]['newName'] = repo
+k['images'][0]['newTag'] = tag
+with open('deploy/kubernetes/overlays/staging/kustomization.yaml', 'w') as f:
+    yaml.dump(k, f)
+"
 kubectl apply -k deploy/kubernetes/overlays/staging/
 
-# 4. Monitor rollout status
+# 6. Monitor rollout status
 kubectl rollout status deployment/opswingman-backend -n opswingman-staging --timeout=300s
 ```
 

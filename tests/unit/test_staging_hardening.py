@@ -168,3 +168,39 @@ def test_preflight_verifies_staging_and_migration_strategy():
     ing_check = next((c for c in res["checks"] if c["name"] == "Ingress Configuration"), None)
     assert ing_check is not None
     assert ing_check["status"] == "PASS"
+
+
+# ==============================================================================
+# 6. Safety & Consistency Hardening Tests (Phase 5 Increment 7.1)
+# ==============================================================================
+
+def test_migration_job_has_no_hardcoded_namespace():
+    """Verifies migration-job.yaml does not hardcode namespace, ensuring portability to staging."""
+    job_path = K8S_DIR / "migration-job.yaml"
+    with open(job_path, "r", encoding="utf-8") as f:
+        job = yaml.safe_load(f)
+    assert "namespace" not in job.get("metadata", {}), "migration-job.yaml should not hardcode namespace"
+
+
+def test_staging_workflow_image_synchronization():
+    """Verifies that deploy-staging.yml synchronizes target image across build, migration, and deployment."""
+    wf_path = REPO_ROOT / ".github" / "workflows" / "deploy-staging.yml"
+    with open(wf_path, "r", encoding="utf-8") as f:
+        wf = yaml.safe_load(f)
+
+    # 1. build-staging-image job outputs target_image
+    build_job = wf["jobs"].get("build-staging-image")
+    assert build_job is not None
+    assert "target_image" in build_job["outputs"]
+
+    # 2. deploy-staging depends on build-staging-image
+    deploy_job = wf["jobs"].get("deploy-staging")
+    assert deploy_job is not None
+    assert "build-staging-image" in deploy_job.get("needs", [])
+
+    # 3. Read steps to verify image synchronization and failure guard
+    steps = deploy_job.get("steps", [])
+    step_runs = " ".join(s.get("run", "") for s in steps)
+    assert "migration-job.yaml" in step_runs
+    assert "TARGET_IMAGE" in step_runs
+    assert "wait --for=condition=complete" in step_runs
