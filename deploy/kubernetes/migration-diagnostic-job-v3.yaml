@@ -1,0 +1,106 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opswingman-db-migrate-diagnostic-v3
+  namespace: opswingman-staging
+  labels:
+    app.kubernetes.io/name: opswingman-db-migrate-diagnostic
+    app.kubernetes.io/component: migration-diagnostic
+    app.kubernetes.io/part-of: opswingman-platform
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opswingman-db-migrate-diagnostic
+        app.kubernetes.io/component: migration-diagnostic
+        app.kubernetes.io/part-of: opswingman-platform
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: migrate-diagnostic
+          image: opswingman-backend:staging-migrationfix-20261018
+          imagePullPolicy: Never
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -o pipefail
+
+              echo "=== [Step 1/2] Database & Role Safety Check ==="
+              python -c "
+              import os, sys
+              from sqlalchemy import create_engine, text
+              from sqlalchemy.engine import make_url
+
+              try:
+                  raw_url = os.environ.get('DATABASE_SYNC_URL')
+                  if not raw_url:
+                      print('PREFLIGHT FAILED: DATABASE_SYNC_URL is not set', file=sys.stderr)
+                      sys.exit(1)
+
+                  parsed = make_url(raw_url)
+                  if parsed.database != 'opswingman_staging' or parsed.username != 'opswingman_staging':
+                      print(f'PREFLIGHT FAILED: URL targets database=\"{parsed.database}\" and user=\"{parsed.username}\", expected \"opswingman_staging\"', file=sys.stderr)
+                      sys.exit(1)
+
+                  engine = create_engine(raw_url)
+                  with engine.connect() as conn:
+                      row = conn.execute(text('SELECT current_database(), current_user;')).fetchone()
+                      if not row:
+                          print('PREFLIGHT FAILED: No rows returned from current_database check', file=sys.stderr)
+                          sys.exit(1)
+                      db, user = row[0], row[1]
+                      if db != 'opswingman_staging' or user != 'opswingman_staging':
+                          print(f'PREFLIGHT FAILED: Database engine reported database=\"{db}\" and user=\"{user}\", expected \"opswingman_staging\"', file=sys.stderr)
+                          sys.exit(1)
+
+                  print('PREFLIGHT PASSED: Successfully validated database and user \"opswingman_staging\".')
+              except Exception:
+                  print('PREFLIGHT FAILED: Database connection or validation error occurred.', file=sys.stderr)
+                  sys.exit(1)
+              "
+              PREFLIGHT_STATUS=$?
+
+              if [ $PREFLIGHT_STATUS -ne 0 ]; then
+                echo "Preflight verification failed with exit code ${PREFLIGHT_STATUS}."
+                echo "Sleeping 120 seconds to preserve logs for diagnostic collection..."
+                sleep 120
+                exit $PREFLIGHT_STATUS
+              fi
+
+              echo "=== [Step 2/2] Running Migration Execution ==="
+              python scripts/ops.py migrate
+              MIGRATE_STATUS=$?
+
+              if [ $MIGRATE_STATUS -ne 0 ]; then
+                echo "Migration failed with exit code ${MIGRATE_STATUS}."
+                echo "Sleeping 120 seconds to preserve logs for diagnostic collection..."
+                sleep 120
+                exit $MIGRATE_STATUS
+              fi
+
+              echo "=== Staging Migration Diagnostic Completed Successfully ==="
+
+          envFrom:
+            - configMapRef:
+                name: opswingman-backend-config
+            - secretRef:
+                name: opswingman-backend-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

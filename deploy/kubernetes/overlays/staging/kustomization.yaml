@@ -8,9 +8,16 @@ resources:
 
 images:
   - name: opswingman/backend
-    newName: ghcr.io/opswingman/backend
-    newTag: staging-latest
+    newName: opswingman-backend
+    newTag: staging-local
 
 patches:
   - path: configmap-patch.yaml
   - path: ingress-patch.yaml
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: opswingman-backend-secrets
+        namespace: opswingman

@@ -1,0 +1,39 @@
+﻿apiVersion: v1
+kind: Pod
+metadata:
+  name: staging-schema-verify-v2
+  namespace: opswingman-staging
+spec:
+  restartPolicy: Never
+  containers:
+  - name: verify
+    image: opswingman-backend:staging-migrationfix-20261018
+    imagePullPolicy: Never
+    command: ["python", "-c"]
+    args:
+    - |
+      import os
+      from sqlalchemy import create_engine, text
+      url = os.environ.get("DATABASE_SYNC_URL")
+      if not url:
+          raise SystemExit("DATABASE_SYNC_URL is missing")
+      engine = create_engine(url)
+      with engine.connect() as conn:
+          db, user = conn.execute(text("SELECT current_database(), current_user")).one()
+          print("Database:", db)
+          print("Role:", user)
+          if db != "opswingman_staging" or user != "opswingman_staging":
+              raise SystemExit("SAFETY CHECK FAILED")
+          print("Alembic versions:", conn.execute(text("SELECT version_num FROM alembic_version")).scalars().all())
+          print("updated_at column:", conn.execute(text("""
+              SELECT column_name, data_type, is_nullable
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'order_items'
+                AND column_name = 'updated_at'
+          """)).all())
+    envFrom:
+    - secretRef:
+        name: opswingman-backend-secrets
+
+

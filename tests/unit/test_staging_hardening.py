@@ -45,7 +45,8 @@ def test_staging_overlay_renders_cleanly():
 
     rendered = res.stdout
     docs = list(yaml.safe_load_all(rendered))
-    assert len(docs) >= 6
+    # Staging overlay renders 5 resources: Namespace, ConfigMap, Service, Deployment, Ingress (Secret excluded)
+    assert len(docs) == 5
 
     # 1. Namespace
     ns_doc = next((d for d in docs if d.get("kind") == "Namespace"), None)
@@ -60,15 +61,23 @@ def test_staging_overlay_renders_cleanly():
     assert cm_doc["data"]["AUTO_MIGRATE"] == "false"
     assert cm_doc["data"]["WAIT_FOR_MIGRATION"] == "true"
     assert "staging.opswingman.io" in cm_doc["data"]["BACKEND_CORS_ORIGINS"]
+    assert cm_doc["data"]["VALKEY_HOST"] == "host.docker.internal"
+    assert cm_doc["data"]["VALKEY_PORT"] == "6379"
+    assert cm_doc["data"]["VALKEY_URL"] == "redis://host.docker.internal:6379/1"
 
-    # 3. Deployment & Image Override
+    # 3. Secret must NOT be rendered (prevent placeholder leakage)
+    sec_doc = next((d for d in docs if d.get("kind") == "Secret"), None)
+    assert sec_doc is None, "Placeholder Secret must be omitted from staging render"
+
+    # 4. Deployment & Image Override
     dep_doc = next((d for d in docs if d.get("kind") == "Deployment"), None)
     assert dep_doc is not None
     assert dep_doc["metadata"]["namespace"] == "opswingman-staging"
     container = dep_doc["spec"]["template"]["spec"]["containers"][0]
-    assert container["image"] == "ghcr.io/opswingman/backend:staging-latest"
+    assert container["image"] == "opswingman-backend:staging-local"
+    assert container.get("imagePullPolicy") == "IfNotPresent"
 
-    # 4. Ingress
+    # 5. Ingress
     ing_doc = next((d for d in docs if d.get("kind") == "Ingress"), None)
     assert ing_doc is not None
     assert ing_doc["metadata"]["namespace"] == "opswingman-staging"
@@ -98,6 +107,8 @@ def test_migration_job_manifest_validity():
     assert pod_sec["runAsUser"] == 1000
 
     container = job["spec"]["template"]["spec"]["containers"][0]
+    assert container["image"] == "opswingman-backend:staging-local"
+    assert container.get("imagePullPolicy") == "IfNotPresent"
     assert container["command"] == ["python", "scripts/ops.py", "migrate"]
     assert "ALL" in container["securityContext"]["capabilities"]["drop"]
 
@@ -204,3 +215,33 @@ def test_staging_workflow_image_synchronization():
     assert "migration-job.yaml" in step_runs
     assert "TARGET_IMAGE" in step_runs
     assert "wait --for=condition=complete" in step_runs
+
+
+def test_staging_workflow_permissions():
+    """Verifies that deploy-staging.yml defines explicit permissions block."""
+    wf_path = REPO_ROOT / ".github" / "workflows" / "deploy-staging.yml"
+    with open(wf_path, "r", encoding="utf-8") as f:
+        wf = yaml.safe_load(f)
+
+    perms = wf.get("permissions", {})
+    assert perms.get("contents") == "read"
+    assert perms.get("packages") == "write"
+
+
+def test_readme_rollback_documents_database_implications():
+    """Verifies that README.md explicitly documents that rolling back a deployment does not downgrade the database."""
+    readme_path = REPO_ROOT / "README.md"
+    content = readme_path.read_text(encoding="utf-8")
+    assert "does not down-migrate the database" in content or "does not downgrade database schema" in content
+
+
+def test_dockerfile_packaging_includes_scripts():
+    """Verifies that docker/Dockerfile.backend copies scripts/ directory before non-root chown."""
+    dockerfile_path = REPO_ROOT / "docker" / "Dockerfile.backend"
+    content = dockerfile_path.read_text(encoding="utf-8")
+
+    assert "COPY scripts /app/scripts" in content
+    # Verify scripts copy happens before chown opsuser
+    copy_pos = content.find("COPY scripts /app/scripts")
+    chown_pos = content.find("chown -R opsuser:opsuser /app", copy_pos)
+    assert chown_pos != -1, "COPY scripts should occur before chown -R opsuser:opsuser /app"

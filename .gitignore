@@ -117,3 +117,9 @@ OpsWingman_Project_Master_Blueprint.docx
 *.docx
 *.doc
 blueprint*
+
+# Local Archives & Scripts
+start.txt
+*.tar
+*.tar.gz
+

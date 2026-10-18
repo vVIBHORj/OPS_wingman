@@ -551,7 +551,7 @@ curl -s http://localhost:8000/health/live
 curl -s http://localhost:8000/health/ready
 curl -s http://localhost:8000/risk/model-info
 
-# Emergency rollback
+# Emergency rollback (reverts container binaries only; does not downgrade database schema)
 kubectl rollout history deployment/opswingman-backend -n opswingman-staging
 kubectl rollout undo deployment/opswingman-backend -n opswingman-staging
 kubectl rollout status deployment/opswingman-backend -n opswingman-staging

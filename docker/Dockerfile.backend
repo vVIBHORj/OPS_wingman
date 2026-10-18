@@ -37,6 +37,7 @@ COPY database /app/database
 COPY simulator /app/simulator
 COPY workers /app/workers
 COPY integrations /app/integrations
+COPY scripts /app/scripts
 
 # Adjust permissions for non-root runtime
 RUN chown -R opsuser:opsuser /app

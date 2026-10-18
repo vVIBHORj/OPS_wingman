@@ -10,3 +10,6 @@ data:
   AUTO_MIGRATE: "false"
   WAIT_FOR_MIGRATION: "true"
   LOG_LEVEL: "INFO"
+  VALKEY_HOST: "host.docker.internal"
+  VALKEY_PORT: "6379"
+  VALKEY_URL: "redis://host.docker.internal:6379/1"

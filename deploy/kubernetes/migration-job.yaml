@@ -23,7 +23,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: migrate
-          image: opswingman/backend:v0.1.0
+          image: opswingman-backend:staging-local
           imagePullPolicy: IfNotPresent
           command: ["python", "scripts/ops.py", "migrate"]
           securityContext:
