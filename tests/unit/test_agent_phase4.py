@@ -1,4 +1,5 @@
-"""Unit and Integration tests for OpsAgent Phase 4 Post-Action State Verification (Deliverable D-14).
+"""Unit and Integration tests for OpsAgent Phase 4 Post-Action State Verification
+(Deliverable D-14).
 
 Verifies:
 a. Successful order cancellation -> verification VERIFIED
@@ -17,14 +18,14 @@ k. resume_approved_action alias execution
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, Optional
+
 import pytest
 from sqlalchemy.orm import Session
 
 import simulator
 from backend.agents.ops_agent import AgentGraphState, OpsAgent
-from backend.approvals.service import ApprovalService
 from backend.rag.seed_knowledge import seed_default_knowledge
-from backend.tools.base import RiskLevel, ToolDefinition, ToolRegistry, ToolType
+from backend.tools.base import RiskLevel, ToolDefinition, ToolType
 from backend.tools.registry import create_default_tool_registry
 from backend.tools.schemas import CancelOrderInput
 from backend.verification import (
@@ -35,8 +36,16 @@ from backend.verification import (
     state_verification_service,
 )
 from backend.workflows.checkpoint import checkpoint_store
-from backend.workflows.state import WorkflowRunRecord, WorkflowState
-from database.models import Customer, Order, OrderStatus, Payment, PaymentMethod, PaymentStatus, Product
+from backend.workflows.state import WorkflowState
+from database.models import (
+    Customer,
+    Order,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+    PaymentStatus,
+    Product,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -98,6 +107,7 @@ def _setup_test_order(
 # a. Successful order cancellation -> verification VERIFIED
 # ==============================================================================
 
+
 def test_successful_cancellation_verification_verified(agent: OpsAgent, db_session: Session):
     _, order, _ = _setup_test_order(db_session)
 
@@ -139,6 +149,7 @@ def test_successful_cancellation_verification_verified(agent: OpsAgent, db_sessi
 # b. Successful refund -> verification VERIFIED
 # ==============================================================================
 
+
 def test_successful_refund_verification_verified(agent: OpsAgent, db_session: Session):
     # High value refund requiring approval (> 2000 INR)
     _, order, pay = _setup_test_order(db_session, amount=Decimal("7500.00"))
@@ -179,6 +190,7 @@ def test_successful_refund_verification_verified(agent: OpsAgent, db_session: Se
 # c. Tool reports success but DB state remains unchanged -> DIVERGENT
 # ==============================================================================
 
+
 def test_tool_success_but_db_unchanged_divergent(db_session: Session):
     _, order, _ = _setup_test_order(db_session)
 
@@ -186,7 +198,9 @@ def test_tool_success_but_db_unchanged_divergent(db_session: Session):
     registry = create_default_tool_registry()
     registry._tools.pop("cancel_order", None)
 
-    def buggy_cancel_order(inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def buggy_cancel_order(
+        inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         return {
             "id": str(inputs.order_id),
             "order_number": order.order_number,
@@ -194,14 +208,16 @@ def test_tool_success_but_db_unchanged_divergent(db_session: Session):
             "cancellation_reason": inputs.reason,
         }
 
-    registry.register(ToolDefinition(
-        name="cancel_order",
-        description="Buggy cancel order that does not persist changes.",
-        tool_type=ToolType.WRITE,
-        risk_level=RiskLevel.HIGH,
-        input_schema=CancelOrderInput,
-        handler=buggy_cancel_order,
-    ))
+    registry.register(
+        ToolDefinition(
+            name="cancel_order",
+            description="Buggy cancel order that does not persist changes.",
+            tool_type=ToolType.WRITE,
+            risk_level=RiskLevel.HIGH,
+            input_schema=CancelOrderInput,
+            handler=buggy_cancel_order,
+        )
+    )
 
     buggy_agent = OpsAgent(tool_registry=registry)
     run_record = buggy_agent.run(
@@ -238,6 +254,7 @@ def test_tool_success_but_db_unchanged_divergent(db_session: Session):
 # d. Expected entity cannot be found -> NOT_FOUND
 # ==============================================================================
 
+
 def test_expected_entity_not_found(agent: OpsAgent, db_session: Session):
     non_existent_id = str(uuid.uuid4())
 
@@ -259,6 +276,7 @@ def test_expected_entity_not_found(agent: OpsAgent, db_session: Session):
 # ==============================================================================
 # e. Verification query/database failure -> ERROR
 # ==============================================================================
+
 
 def test_verification_query_failure_error(agent: OpsAgent, db_session: Session):
     _, order, _ = _setup_test_order(db_session)
@@ -300,6 +318,7 @@ def test_verification_query_failure_error(agent: OpsAgent, db_session: Session):
 # ==============================================================================
 # f. Verification results are persisted in workflow state and checkpoint store
 # ==============================================================================
+
 
 def test_verification_results_persisted_in_workflow_state_and_checkpoints(
     agent: OpsAgent,
@@ -349,6 +368,7 @@ def test_verification_results_persisted_in_workflow_state_and_checkpoints(
 # g. Approved-action resume performs verification after execution
 # ==============================================================================
 
+
 def test_approved_action_resume_performs_verification_after_execution(
     agent: OpsAgent,
     db_session: Session,
@@ -383,6 +403,7 @@ def test_approved_action_resume_performs_verification_after_execution(
 # ==============================================================================
 # h. Existing Phase 1-3 agent behavior remains unchanged
 # ==============================================================================
+
 
 def test_existing_phase1_to_3_agent_behavior_unchanged(agent: OpsAgent, db_session: Session):
     _, order, _ = _setup_test_order(db_session)
@@ -421,6 +442,7 @@ def test_existing_phase1_to_3_agent_behavior_unchanged(agent: OpsAgent, db_sessi
 # i. Verification does not mutate the business entity itself
 # ==============================================================================
 
+
 def test_verification_does_not_mutate_business_entity(db_session: Session):
     _, order, _ = _setup_test_order(db_session)
     orig_status = order.status
@@ -444,6 +466,7 @@ def test_verification_does_not_mutate_business_entity(db_session: Session):
 # ==============================================================================
 # j. resume_approved_action alias execution
 # ==============================================================================
+
 
 def test_resume_approved_action_alias(agent: OpsAgent, db_session: Session):
     _, order, _ = _setup_test_order(db_session)
@@ -469,6 +492,7 @@ def test_resume_approved_action_alias(agent: OpsAgent, db_session: Session):
 # ==============================================================================
 # k. Dedicated verify_execution LangGraph node behavior
 # ==============================================================================
+
 
 def test_graph_node_verify_execution_in_workflow_steps(agent: OpsAgent, db_session: Session):
     _, order, _ = _setup_test_order(db_session)
@@ -522,4 +546,3 @@ def test_graph_node_verify_execution_on_state_changing_tool(db_session: Session)
     assert ver["status"] == VerificationStatus.VERIFIED.value
     assert ver["entity_type"] == "ticket"
     assert ver["actual_state"] == "OPEN"
-

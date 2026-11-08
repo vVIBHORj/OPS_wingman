@@ -3,6 +3,7 @@ Unit tests for Phase 0 Foundation verification.
 """
 
 from fastapi.testclient import TestClient
+
 from backend.main import app
 
 client = TestClient(app)
@@ -30,22 +31,22 @@ def test_health_endpoint():
 def test_package_structure():
     """Verify that core package namespaces are importable."""
     import backend
-    import backend.api
     import backend.agents
-    import backend.workflows
-    import backend.tools
-    import backend.policies
-    import backend.rag
-    import backend.ml
+    import backend.api
     import backend.approvals
     import backend.audit
-    import backend.security
     import backend.evaluation
+    import backend.ml
+    import backend.policies
+    import backend.rag
+    import backend.security
+    import backend.tools
+    import backend.workflows
     import database
+    import evals
+    import integrations
     import simulator
     import workers
-    import integrations
-    import evals
 
     assert backend is not None
     assert database is not None

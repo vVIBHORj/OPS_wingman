@@ -5,12 +5,9 @@ ground truth to confirm that state-changing tool executions actually produced
 their intended business outcomes without silent failures or state drift.
 """
 
-from datetime import datetime, timezone
+import uuid
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Union
-import uuid
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from database.models import (
     DomainEvent,
@@ -24,6 +21,9 @@ from database.models import (
     TicketPriority,
     TicketStatus,
 )
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from backend.verification.schemas import (
     VerificationRequest,
     VerificationResult,
@@ -32,7 +32,8 @@ from backend.verification.schemas import (
 
 
 class StateVerificationService:
-    """Read-only verification engine confirming external actions produced intended database changes."""
+    """Read-only verification engine confirming external actions produced intended database
+    changes."""
 
     # ==========================================================================
     # Entity-Specific Verifiers
@@ -44,7 +45,8 @@ class StateVerificationService:
         order_id: Union[str, uuid.UUID],
         expected_reason: Optional[str] = None,
     ) -> VerificationResult:
-        """Verifies that an order has transitioned to CANCELLED state and optional reason matches."""
+        """Verifies that an order has transitioned to CANCELLED state and optional reason
+        matches."""
         target_state = OrderStatus.CANCELLED.value
         entity_id_str = str(order_id)
         discrepancies: List[str] = []
@@ -86,7 +88,8 @@ class StateVerificationService:
 
             if expected_reason is not None and order.cancellation_reason != expected_reason:
                 discrepancies.append(
-                    f"Cancellation reason mismatch: expected '{expected_reason}', got '{order.cancellation_reason}'."
+                    f"Cancellation reason mismatch: expected '{expected_reason}', "
+                    f"got '{order.cancellation_reason}'."
                 )
 
             verified = len(discrepancies) == 0
@@ -121,7 +124,8 @@ class StateVerificationService:
         order_id_or_payment_id: Union[str, uuid.UUID],
         expected_amount: Optional[Union[float, Decimal]] = None,
     ) -> VerificationResult:
-        """Verifies that a payment has transitioned to REFUNDED status and optional amount matches."""
+        """Verifies that a payment has transitioned to REFUNDED status and optional
+        amount matches."""
         target_state = PaymentStatus.REFUNDED.value
         entity_id_str = str(order_id_or_payment_id)
         discrepancies: List[str] = []
@@ -135,7 +139,9 @@ class StateVerificationService:
                 if payment is None:
                     payment = session.scalar(select(Payment).where(Payment.order_id == val_uuid))
             except ValueError:
-                payment = session.scalar(select(Payment).where(Payment.payment_reference == entity_id_str))
+                payment = session.scalar(
+                    select(Payment).where(Payment.payment_reference == entity_id_str)
+                )
 
             if payment is None:
                 return VerificationResult(
@@ -145,7 +151,9 @@ class StateVerificationService:
                     entity_id=entity_id_str,
                     target_state=target_state,
                     actual_state="NOT_FOUND",
-                    discrepancies=[f"Payment record for '{entity_id_str}' was not found in the database."],
+                    discrepancies=[
+                        f"Payment record for '{entity_id_str}' was not found in the database."
+                    ],
                     operation="refund_payment",
                 )
 
@@ -166,7 +174,8 @@ class StateVerificationService:
                 exp_dec = Decimal(str(expected_amount))
                 if payment.amount != exp_dec:
                     discrepancies.append(
-                        f"Refund amount mismatch: expected {exp_dec}, observed payment amount {payment.amount}."
+                        f"Refund amount mismatch: expected {exp_dec}, observed payment "
+                        f"amount {payment.amount}."
                     )
 
             verified = len(discrepancies) == 0
@@ -203,7 +212,11 @@ class StateVerificationService:
         expected_priority: Optional[Union[str, TicketPriority]] = None,
     ) -> VerificationResult:
         """Verifies ticket persistence, lifecycle status, and priority attributes."""
-        target_state = expected_status.value if isinstance(expected_status, TicketStatus) else str(expected_status)
+        target_state = (
+            expected_status.value
+            if isinstance(expected_status, TicketStatus)
+            else str(expected_status)
+        )
         entity_id_str = str(ticket_id_or_number)
         discrepancies: List[str] = []
 
@@ -253,7 +266,8 @@ class StateVerificationService:
                 )
                 if ticket.priority.value != exp_prio_val:
                     discrepancies.append(
-                        f"Ticket priority mismatch: expected '{exp_prio_val}', got '{ticket.priority.value}'."
+                        f"Ticket priority mismatch: expected '{exp_prio_val}', "
+                        f"got '{ticket.priority.value}'."
                     )
 
             verified = len(discrepancies) == 0
@@ -289,7 +303,11 @@ class StateVerificationService:
         expected_status: Union[str, ShipmentStatus] = ShipmentStatus.DELIVERED,
     ) -> VerificationResult:
         """Verifies shipment lifecycle state against database ground truth."""
-        target_state = expected_status.value if isinstance(expected_status, ShipmentStatus) else str(expected_status)
+        target_state = (
+            expected_status.value
+            if isinstance(expected_status, ShipmentStatus)
+            else str(expected_status)
+        )
         entity_id_str = str(shipment_id_or_tracking)
         discrepancies: List[str] = []
 
@@ -304,7 +322,9 @@ class StateVerificationService:
                 pass
 
             if shipment is None:
-                shipment = session.scalar(select(Shipment).where(Shipment.tracking_number == entity_id_str))
+                shipment = session.scalar(
+                    select(Shipment).where(Shipment.tracking_number == entity_id_str)
+                )
 
             if shipment is None:
                 return VerificationResult(
@@ -323,7 +343,9 @@ class StateVerificationService:
                 "tracking_number": shipment.tracking_number,
                 "carrier": shipment.carrier,
                 "status": actual_status,
-                "actual_delivery_date": shipment.actual_delivery_date.isoformat() if shipment.actual_delivery_date else None,
+                "actual_delivery_date": shipment.actual_delivery_date.isoformat()
+                if shipment.actual_delivery_date
+                else None,
             }
 
             if actual_status != target_state:
@@ -395,7 +417,8 @@ class StateVerificationService:
 
             if not events:
                 discrepancies.append(
-                    f"No domain event of type '{expected_event_type}' was recorded for entity '{entity_id_str}'."
+                    f"No domain event of type '{expected_event_type}' was recorded for "
+                    f"entity '{entity_id_str}'."
                 )
                 return VerificationResult(
                     verified=False,
@@ -420,7 +443,9 @@ class StateVerificationService:
                 operation="dispatch_event",
                 details={
                     "event_id": str(latest_event.id),
-                    "occurred_at": latest_event.occurred_at.isoformat() if latest_event.occurred_at else None,
+                    "occurred_at": latest_event.occurred_at.isoformat()
+                    if latest_event.occurred_at
+                    else None,
                     "payload": latest_event.payload,
                 },
             )
@@ -491,7 +516,9 @@ class StateVerificationService:
                 entity_id=request.entity_id,
                 target_state=request.target_state,
                 actual_state="UNSUPPORTED_ENTITY",
-                discrepancies=[f"Unsupported entity type for verification: '{request.entity_type}'."],
+                discrepancies=[
+                    f"Unsupported entity type for verification: '{request.entity_type}'."
+                ],
                 operation=request.operation,
             )
 

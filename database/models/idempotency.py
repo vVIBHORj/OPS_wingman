@@ -1,8 +1,11 @@
-"""Idempotency Record database model for OpsWingman Resilience & Deduplication (Phase 4 - Deliverable D-15)."""
+"""Idempotency Record database model for OpsWingman Resilience & Deduplication
+(Phase 4 - Deliverable D-15)."""
 
 from datetime import datetime
-from typing import Any, Dict, Optional
-from sqlalchemy import DateTime, Enum as SQLEnum, Index, JSON, String, UniqueConstraint
+from typing import Any, Optional
+
+from sqlalchemy import JSON, DateTime, Index, String, UniqueConstraint
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -37,4 +40,7 @@ class IdempotencyRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         status_val = self.status.value if hasattr(self.status, "value") else str(self.status)
-        return f"<IdempotencyRecord(id='{self.id}', scope='{self.scope}', key='{self.idempotency_key}', status='{status_val}')>"
+        return (
+            f"<IdempotencyRecord(id='{self.id}', scope='{self.scope}', "
+            f"key='{self.idempotency_key}', status='{status_val}')>"
+        )

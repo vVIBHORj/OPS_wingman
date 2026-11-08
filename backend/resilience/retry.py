@@ -9,7 +9,6 @@ import asyncio
 import random
 import time
 from typing import (
-    Any,
     Awaitable,
     Callable,
     List,
@@ -41,6 +40,7 @@ DEFAULT_TRANSIENT_EXCEPTIONS: tuple[Type[BaseException], ...] = (
 # Domain Exceptions
 # ==============================================================================
 
+
 class RetryError(Exception):
     """Base exception for operations failing inside the retry engine."""
 
@@ -60,17 +60,20 @@ class RetryError(Exception):
 
 class MaxRetriesExceededError(RetryError):
     """Raised when maximum retry attempts are exhausted without success."""
+
     pass
 
 
 class TimeoutBudgetExceededError(RetryError):
     """Raised when the cumulative execution time budget is exhausted."""
+
     pass
 
 
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
+
 
 def is_transient_error(
     exc: BaseException,
@@ -111,7 +114,7 @@ def calculate_backoff_delay(
         attempt_index = 1
 
     exponent = attempt_index - 1
-    base_delay = policy.initial_delay_seconds * (policy.backoff_multiplier ** exponent)
+    base_delay = policy.initial_delay_seconds * (policy.backoff_multiplier**exponent)
     capped_delay = min(policy.max_delay_seconds, base_delay)
 
     if policy.jitter_enabled and policy.jitter_ratio > 0.0:
@@ -127,8 +130,10 @@ def calculate_backoff_delay(
 # Retry Executor
 # ==============================================================================
 
+
 class RetryExecutor:
-    """Executes callables under configured exponential backoff, timeout budget, and transient error policies."""
+    """Executes callables under configured exponential backoff, timeout budget,
+    and transient error policies."""
 
     def __init__(self, default_policy: Optional[RetryPolicyConfig] = None) -> None:
         self.default_policy = default_policy or RetryPolicyConfig()
@@ -176,13 +181,17 @@ class RetryExecutor:
                     elapsed_seconds=0.0,
                     delay_before_attempt=prev_delay,
                     error_type="TimeoutBudgetExceededError",
-                    error_message=f"Timeout budget of {active_policy.timeout_seconds}s exceeded before attempt {attempt_num}.",
+                    error_message=(
+                        f"Timeout budget of {active_policy.timeout_seconds}s exceeded before "
+                        f"attempt {attempt_num}."
+                    ),
                     retryable=True,
                     timed_out=True,
                 )
                 attempts.append(timeout_res)
                 raise TimeoutBudgetExceededError(
-                    f"Timeout budget of {active_policy.timeout_seconds}s exhausted before attempt {attempt_num}.",
+                    f"Timeout budget of {active_policy.timeout_seconds}s exhausted before "
+                    f"attempt {attempt_num}.",
                     attempts=attempts,
                     last_exception=attempts[-2].error_message if len(attempts) > 1 else None,  # type: ignore
                     timed_out=True,
@@ -240,7 +249,8 @@ class RetryExecutor:
                 # Check if this was the last allowed attempt
                 if attempt_num >= active_policy.max_attempts:
                     raise MaxRetriesExceededError(
-                        f"Operation failed after {attempt_num} attempts. Last error: {type(exc).__name__}: {exc}",
+                        f"Operation failed after {attempt_num} attempts. "
+                        f"Last error: {type(exc).__name__}: {exc}",
                         attempts=attempts,
                         last_exception=exc,
                         timed_out=False,
@@ -254,7 +264,8 @@ class RetryExecutor:
                 if time_after_delay >= active_policy.timeout_seconds:
                     attempt_rec.timed_out = True
                     raise TimeoutBudgetExceededError(
-                        f"Timeout budget of {active_policy.timeout_seconds}s would be exceeded by backoff delay ({delay:.3f}s) before attempt {attempt_num + 1}.",
+                        f"Timeout budget of {active_policy.timeout_seconds}s would be exceeded by "
+                        f"backoff delay ({delay:.3f}s) before attempt {attempt_num + 1}.",
                         attempts=attempts,
                         last_exception=exc,
                         timed_out=True,
@@ -308,13 +319,17 @@ class RetryExecutor:
                     elapsed_seconds=0.0,
                     delay_before_attempt=prev_delay,
                     error_type="TimeoutBudgetExceededError",
-                    error_message=f"Timeout budget of {active_policy.timeout_seconds}s exceeded before attempt {attempt_num}.",
+                    error_message=(
+                        f"Timeout budget of {active_policy.timeout_seconds}s exceeded before "
+                        f"attempt {attempt_num}."
+                    ),
                     retryable=True,
                     timed_out=True,
                 )
                 attempts.append(timeout_res)
                 raise TimeoutBudgetExceededError(
-                    f"Timeout budget of {active_policy.timeout_seconds}s exhausted before attempt {attempt_num}.",
+                    f"Timeout budget of {active_policy.timeout_seconds}s exhausted before "
+                    f"attempt {attempt_num}.",
                     attempts=attempts,
                     last_exception=attempts[-2].error_message if len(attempts) > 1 else None,  # type: ignore
                     timed_out=True,
@@ -369,7 +384,8 @@ class RetryExecutor:
 
                 if attempt_num >= active_policy.max_attempts:
                     raise MaxRetriesExceededError(
-                        f"Async operation failed after {attempt_num} attempts. Last error: {type(exc).__name__}: {exc}",
+                        f"Async operation failed after {attempt_num} attempts. "
+                        f"Last error: {type(exc).__name__}: {exc}",
                         attempts=attempts,
                         last_exception=exc,
                         timed_out=False,
@@ -381,7 +397,8 @@ class RetryExecutor:
                 if time_after_delay >= active_policy.timeout_seconds:
                     attempt_rec.timed_out = True
                     raise TimeoutBudgetExceededError(
-                        f"Timeout budget of {active_policy.timeout_seconds}s would be exceeded by backoff delay ({delay:.3f}s) before attempt {attempt_num + 1}.",
+                        f"Timeout budget of {active_policy.timeout_seconds}s would be exceeded by "
+                        f"backoff delay ({delay:.3f}s) before attempt {attempt_num + 1}.",
                         attempts=attempts,
                         last_exception=exc,
                         timed_out=True,

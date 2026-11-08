@@ -1,1 +1,1 @@
-﻿# Package marker for database
+# Package marker for database

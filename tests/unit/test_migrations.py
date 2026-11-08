@@ -9,11 +9,12 @@ Verifies:
 """
 
 from pathlib import Path
+
 import sqlalchemy as sa
-from alembic.config import Config
 from alembic import command
-from alembic.script import ScriptDirectory
+from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 
@@ -51,7 +52,9 @@ def test_migration_graph_structure():
 
 
 def test_fresh_database_migration_to_head(tmp_path, monkeypatch):
-    """Verifies that a fresh database successfully migrates from base to head without duplicate column errors."""
+    """Verifies that a fresh database successfully migrates from base to head
+    without duplicate column errors.
+    """
     db_file = tmp_path / "fresh_test.db"
     sqlite_url = f"sqlite:///{db_file.as_posix()}"
 
@@ -68,14 +71,18 @@ def test_fresh_database_migration_to_head(tmp_path, monkeypatch):
     with engine.connect() as conn:
         ctx = MigrationContext.configure(conn)
         current_rev = ctx.get_current_revision()
-        assert current_rev == "0005_audit_events", f"Expected head 0005_audit_events, got {current_rev}"
+        assert current_rev == "0005_audit_events", (
+            f"Expected head 0005_audit_events, got {current_rev}"
+        )
 
         insp = sa.inspect(conn)
         assert insp.has_table("order_items")
 
         columns = [c["name"] for c in insp.get_columns("order_items")]
         updated_at_count = columns.count("updated_at")
-        assert updated_at_count == 1, f"Expected updated_at to exist exactly once, found {updated_at_count} times"
+        assert updated_at_count == 1, (
+            f"Expected updated_at to exist exactly once, found {updated_at_count} times"
+        )
 
         # Verify other required tables from the full migration chain exist
         assert insp.has_table("orders")

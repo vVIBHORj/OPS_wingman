@@ -1,1 +1,1 @@
-﻿# Package marker for database/migrations
+# Package marker for database/migrations

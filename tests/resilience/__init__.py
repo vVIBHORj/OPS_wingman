@@ -1,1 +1,1 @@
-﻿# Package marker for tests/resilience
+# Package marker for tests/resilience

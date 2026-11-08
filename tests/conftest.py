@@ -8,9 +8,11 @@ import uuid
 from decimal import Decimal
 from pathlib import Path
 from typing import Generator
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Ensure repository root is added to sys.path
 REPO_ROOT = Path(__file__).parent.parent.resolve()
@@ -18,21 +20,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 # Import all models to register with Base.metadata
-from database.models import (
-    ApprovalRecord,
-    Base,
-    Customer,
-    DomainEvent,
-    IdempotencyRecord,
-    KnowledgeChunk,
-    KnowledgeDocument,
-    Order,
-    OrderItem,
-    Payment,
-    Product,
-    Shipment,
-    Ticket,
-)
+import database.models  # noqa: E402, F401
+from database.models import Base, Customer, Product  # noqa: E402
 
 
 @pytest.fixture(scope="function")
@@ -41,6 +30,7 @@ def db_session() -> Generator[Session, None, None]:
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
         echo=False,
     )
     Base.metadata.create_all(bind=engine)
@@ -84,3 +74,39 @@ def db_session() -> Generator[Session, None, None]:
     finally:
         session.close()
         engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def api_client(db_session: Session) -> Generator:
+    """FastAPI TestClient with database dependency overridden by isolated db_session."""
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+    from database.session import get_db
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as client:
+        yield client
+
+    app.dependency_overrides.clear()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Automatically assigns directory-based markers (unit, integration, resilience,
+    security, e2e) to test items based on file location.
+    """
+    for item in items:
+        fspath_str = str(item.fspath)
+        if "/unit" in fspath_str or "\\unit" in fspath_str:
+            item.add_marker(pytest.mark.unit)
+        elif "/integration" in fspath_str or "\\integration" in fspath_str:
+            item.add_marker(pytest.mark.integration)
+        elif "/resilience" in fspath_str or "\\resilience" in fspath_str:
+            item.add_marker(pytest.mark.resilience)
+        elif "/security" in fspath_str or "\\security" in fspath_str:
+            item.add_marker(pytest.mark.security)
+        elif "/e2e" in fspath_str or "\\e2e" in fspath_str:
+            item.add_marker(pytest.mark.e2e)

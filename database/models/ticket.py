@@ -5,10 +5,13 @@ Ticket database model for customer service and operational exceptions.
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Text, ForeignKey, DateTime, Enum as SQLEnum, Index
+
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from database.base import Base, UUIDPrimaryKeyMixin, TimestampMixin, GUID
-from database.models.enums import TicketStatus, TicketPriority, TicketChannel
+
+from database.base import GUID, Base, TimestampMixin, UUIDPrimaryKeyMixin
+from database.models.enums import TicketChannel, TicketPriority, TicketStatus
 
 if TYPE_CHECKING:
     from database.models.customer import Customer
@@ -20,6 +23,7 @@ class Ticket(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     Represents an inbound support ticket, customer issue, or operational inquiry.
     Ground truth entity for customer interactions and workflow ticket resolution.
     """
+
     __tablename__ = "tickets"
 
     ticket_number: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
@@ -68,4 +72,7 @@ class Ticket(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<Ticket(id={self.id}, number='{self.ticket_number}', status='{self.status.value}', priority='{self.priority.value}')>"
+        return (
+            f"<Ticket(id={self.id}, number='{self.ticket_number}', "
+            f"status='{self.status.value}', priority='{self.priority.value}')>"
+        )

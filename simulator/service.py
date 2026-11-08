@@ -4,40 +4,37 @@ Provides a clean interface over orders, payments, shipments, and domain events.
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import List, Dict, Any, Optional, Tuple, Union
-from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 from sqlalchemy.orm import Session
 
 from database.models import (
-    Customer,
-    Product,
-    Order,
-    Payment,
-    Shipment,
     DomainEvent,
-    OrderStatus,
-    PaymentStatus,
-    PaymentMethod,
-    ShipmentStatus,
     EventType,
+    Order,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+    Shipment,
+    ShipmentStatus,
 )
 from database.session import SessionLocal
-from simulator.orders import create_order, get_order, update_order_status, cancel_order
-from simulator.payments import create_payment, get_payment, capture_payment, fail_payment
-from simulator.shipments import (
-    create_shipment,
-    get_shipment,
-    update_shipment_status,
-    delay_shipment,
-    deliver_shipment,
-)
 from simulator.events import (
-    record_event,
     get_event,
     list_events,
-    list_events_for_entity,
     list_events_by_type,
+    list_events_for_entity,
+)
+from simulator.orders import cancel_order, create_order, get_order, update_order_status
+from simulator.payments import capture_payment, create_payment, fail_payment, get_payment
+from simulator.shipments import (
+    create_shipment,
+    delay_shipment,
+    deliver_shipment,
+    get_shipment,
+    update_shipment_status,
 )
 
 
@@ -287,7 +284,9 @@ class BusinessSimulator:
         entity_id: uuid.UUID,
         limit: int = 100,
     ) -> List[DomainEvent]:
-        return list_events_for_entity(self.session, entity_type=entity_type, entity_id=entity_id, limit=limit)
+        return list_events_for_entity(
+            self.session, entity_type=entity_type, entity_id=entity_id, limit=limit
+        )
 
     def list_events_by_type(
         self,
@@ -310,8 +309,12 @@ class BusinessSimulator:
         order = self.create_order(customer_id=customer_id, items=items)
         payment = self.create_payment(order_id=order.id, payment_method=PaymentMethod.UPI)
         payment = self.capture_payment(payment_id=payment.id)
-        shipment = self.create_shipment(order_id=order.id, carrier=carrier, status=ShipmentStatus.IN_TRANSIT)
-        shipment = self.deliver_shipment(shipment_id=shipment.id, recipient_notes="Signed by customer")
+        shipment = self.create_shipment(
+            order_id=order.id, carrier=carrier, status=ShipmentStatus.IN_TRANSIT
+        )
+        shipment = self.deliver_shipment(
+            shipment_id=shipment.id, recipient_notes="Signed by customer"
+        )
         return order, payment, shipment
 
     def run_delayed_order_flow(
@@ -328,7 +331,9 @@ class BusinessSimulator:
         order = self.create_order(customer_id=customer_id, items=items)
         payment = self.create_payment(order_id=order.id, payment_method=PaymentMethod.CARD)
         payment = self.capture_payment(payment_id=payment.id)
-        shipment = self.create_shipment(order_id=order.id, carrier=carrier, status=ShipmentStatus.IN_TRANSIT)
+        shipment = self.create_shipment(
+            order_id=order.id, carrier=carrier, status=ShipmentStatus.IN_TRANSIT
+        )
         new_eta = datetime.now(timezone.utc) + timedelta(days=4)
         shipment = self.delay_shipment(
             shipment_id=shipment.id,

@@ -3,11 +3,9 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
 from dotenv import load_dotenv
+from sqlalchemy import engine_from_config, pool
 
 # Ensure root directory is on Python path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -25,8 +23,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import models metadata
-from database.base import Base
-import database.models  # noqa: F401
+import database.models  # noqa: E402, F401
+from database.base import Base  # noqa: E402
 
 target_metadata = Base.metadata
 

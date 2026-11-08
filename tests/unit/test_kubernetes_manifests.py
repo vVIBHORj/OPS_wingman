@@ -14,7 +14,7 @@ Verifies:
 
 from pathlib import Path
 from typing import Any, Dict
-import pytest
+
 import yaml
 
 MANIFEST_DIR = Path(__file__).parent.parent.parent / "deploy" / "kubernetes"
@@ -33,6 +33,7 @@ def load_yaml(filename: str) -> Dict[str, Any]:
 # ==============================================================================
 # 1. File Structure & Manifest Existence
 # ==============================================================================
+
 
 def test_manifest_files_exist():
     """Verifies that all required Kubernetes manifest files exist."""
@@ -54,6 +55,7 @@ def test_manifest_files_exist():
 # 2. Namespace & Metadata Tests
 # ==============================================================================
 
+
 def test_namespace_manifest():
     """Verifies namespace specification."""
     data = load_yaml("namespace.yaml")
@@ -65,6 +67,7 @@ def test_namespace_manifest():
 # ==============================================================================
 # 3. ConfigMap & Secret Separation Tests
 # ==============================================================================
+
 
 def test_configmap_production_settings():
     """Verifies ConfigMap has safe production defaults (DEBUG=false, ENVIRONMENT=production)."""
@@ -108,6 +111,7 @@ def test_secret_template_no_real_credentials():
 # ==============================================================================
 # 4. Deployment, Probes & Security Tests
 # ==============================================================================
+
 
 def test_deployment_structure_and_ports():
     """Verifies Deployment metadata, replicas, rolling update strategy, and port 8000."""
@@ -192,6 +196,7 @@ def test_deployment_config_and_secret_references():
 # ==============================================================================
 # 5. Service & Ingress Tests
 # ==============================================================================
+
 
 def test_service_cluster_ip_and_selector():
     """Verifies ClusterIP Service definition and label selector match Deployment."""

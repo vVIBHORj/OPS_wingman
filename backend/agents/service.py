@@ -3,24 +3,30 @@ Ops Agent Service Facade.
 Provides service methods for running workflows, retrieving runs, and discovering tools.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
+
 from sqlalchemy.orm import Session
 
 from backend.agents.ops_agent import OpsAgent
+from backend.audit import AuditService
+from backend.audit import audit_service as default_audit_service
 from backend.ml import MLRiskService, ml_risk_service
 from backend.resilience import (
     IdempotencyService,
-    RetryExecutor,
     ResilientToolExecutor,
+    RetryExecutor,
+)
+from backend.resilience import (
     idempotency_service as default_idempotency_service,
+)
+from backend.resilience import (
     resilient_tool_executor as default_resilient_tool_executor,
 )
-from backend.audit import AuditService, audit_service as default_audit_service
 from backend.tools.base import ToolDefinition, ToolRegistry
 from backend.tools.registry import create_default_tool_registry
 from backend.verification import StateVerificationService, state_verification_service
-from backend.workflows.state import WorkflowRunRecord
 from backend.workflows.checkpoint import checkpoint_store
+from backend.workflows.state import WorkflowRunRecord
 
 
 class OpsAgentService:
@@ -115,4 +121,3 @@ class OpsAgentService:
 
 # Default singleton service instance
 agent_service = OpsAgentService()
-

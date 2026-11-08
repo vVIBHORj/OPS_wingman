@@ -1,7 +1,8 @@
 """Unit tests for IdempotencyRecord database model and constraints (Phase 4 - Deliverable D-15)."""
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -37,7 +38,9 @@ def test_create_idempotency_record(db_session: Session):
 
 
 def test_idempotency_scope_key_uniqueness(db_session: Session):
-    """Verifies that inserting duplicate (scope, idempotency_key) tuples is rejected by unique constraint."""
+    """Verifies that inserting duplicate (scope, idempotency_key) tuples is rejected
+    by unique constraint.
+    """
     key = "unique-key-12345"
     scope = "webhook:razorpay"
 

@@ -4,16 +4,17 @@ Exposes the LangGraph Ops Agent, Workflow Run Checkpoints, and Tool Registry.
 """
 
 from typing import List
+
+from database.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from database.session import get_db
 from backend.agents.service import agent_service
 from backend.api.schemas import (
     AgentRunRequest,
+    ToolMetadataResponse,
     WorkflowResumeRequest,
     WorkflowRunResponse,
-    ToolMetadataResponse,
 )
 
 router = APIRouter(prefix="/agent", tags=["Agent & Workflows"])
@@ -37,7 +38,9 @@ def run_agent_workflow(
     return WorkflowRunResponse.model_validate(run_record)
 
 
-@router.post("/runs/{run_id}/resume", response_model=WorkflowRunResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/runs/{run_id}/resume", response_model=WorkflowRunResponse, status_code=status.HTTP_200_OK
+)
 def resume_workflow_run(
     run_id: str,
     payload: WorkflowResumeRequest,
@@ -82,7 +85,6 @@ def get_workflow_run(run_id: str) -> WorkflowRunResponse:
             detail=f"Workflow run '{run_id}' not found.",
         )
     return WorkflowRunResponse.model_validate(run_record)
-
 
 
 @router.get("/tools", response_model=List[ToolMetadataResponse])

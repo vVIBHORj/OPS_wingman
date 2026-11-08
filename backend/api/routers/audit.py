@@ -5,10 +5,11 @@ Provides read-only inspection of audit events, run histories, and chronological 
 
 import re
 from typing import List
+
+from database.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from database.session import get_db
 from backend.audit.schemas import AuditEventResponse, AuditTimelineResponse
 from backend.audit.service import audit_service
 
@@ -23,11 +24,16 @@ def _validate_identifier(identifier: str, field_name: str = "run_id") -> None:
     if not identifier or not IDENTIFIER_REGEX.match(identifier):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Malformed {field_name}: '{identifier}'. Identifiers must be 1-128 characters containing only letters, numbers, hyphens, or underscores.",
+            detail=(
+                f"Malformed {field_name}: '{identifier}'. Identifiers must be 1-128 characters "
+                "containing only letters, numbers, hyphens, or underscores."
+            ),
         )
 
 
-@router.get("/runs/{run_id}", response_model=List[AuditEventResponse], status_code=status.HTTP_200_OK)
+@router.get(
+    "/runs/{run_id}", response_model=List[AuditEventResponse], status_code=status.HTTP_200_OK
+)
 def get_run_audit_events(
     run_id: str,
     db: Session = Depends(get_db),
@@ -65,7 +71,9 @@ def get_audit_event_by_id(
     return event
 
 
-@router.get("/runs/{run_id}/timeline", response_model=AuditTimelineResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/runs/{run_id}/timeline", response_model=AuditTimelineResponse, status_code=status.HTTP_200_OK
+)
 def get_run_audit_timeline(
     run_id: str,
     db: Session = Depends(get_db),

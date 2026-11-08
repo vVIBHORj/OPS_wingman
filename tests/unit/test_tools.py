@@ -5,15 +5,22 @@ Validates schema validation, risk tiering, tool execution, and error handling.
 
 import uuid
 from decimal import Decimal
+
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from database.base import Base
-from database.models import Customer, Product, Order, Payment, Shipment, OrderStatus, PaymentStatus, PaymentMethod, ShipmentStatus
-from backend.tools.base import ToolRegistry, RiskLevel, ToolType
-from backend.tools.registry import create_default_tool_registry
+import database.models  # noqa: F401
 import simulator
+from backend.tools.base import RiskLevel, ToolType
+from backend.tools.registry import create_default_tool_registry
+from database.base import Base
+from database.models import (
+    Customer,
+    OrderStatus,
+    PaymentStatus,
+    Product,
+)
 
 
 @pytest.fixture(scope="function")
@@ -97,14 +104,18 @@ def test_get_customer_tool(test_db: Session):
     customer_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
 
     # By customer_id
-    res = registry.execute("get_customer", {"customer_id": str(customer_id)}, context={"db": test_db})
+    res = registry.execute(
+        "get_customer", {"customer_id": str(customer_id)}, context={"db": test_db}
+    )
     assert res.success is True
     assert res.data is not None
     assert res.data["email"] == "tools.test@example.com"
     assert res.data["first_name"] == "Vikram"
 
     # By email
-    res_email = registry.execute("get_customer", {"email": "tools.test@example.com"}, context={"db": test_db})
+    res_email = registry.execute(
+        "get_customer", {"email": "tools.test@example.com"}, context={"db": test_db}
+    )
     assert res_email.success is True
     assert res_email.data is not None
     assert res_email.data["city"] == "Pune"
@@ -125,7 +136,9 @@ def test_get_order_and_shipment_tools(test_db: Session):
     shipment = simulator.create_shipment(session=test_db, order_id=order.id, carrier="BlueDart")
 
     # 1. get_order by order_number
-    res_ord = registry.execute("get_order", {"order_number": order.order_number}, context={"db": test_db})
+    res_ord = registry.execute(
+        "get_order", {"order_number": order.order_number}, context={"db": test_db}
+    )
     assert res_ord.success is True
     assert res_ord.data is not None
     assert res_ord.data["order_number"] == order.order_number
@@ -138,7 +151,9 @@ def test_get_order_and_shipment_tools(test_db: Session):
     assert res_pay.data["status"] == PaymentStatus.SUCCESSFUL.value
 
     # 3. get_shipment by tracking_number
-    res_shp = registry.execute("get_shipment", {"tracking_number": shipment.tracking_number}, context={"db": test_db})
+    res_shp = registry.execute(
+        "get_shipment", {"tracking_number": shipment.tracking_number}, context={"db": test_db}
+    )
     assert res_shp.success is True
     assert res_shp.data is not None
     assert res_shp.data["carrier"] == "BlueDart"
@@ -203,7 +218,10 @@ def test_high_risk_authorization_boundary_enforcement(test_db: Session):
     )
     assert res_unauthorized.success is False
     assert res_unauthorized.error is not None
-    assert "Execution blocked: HIGH-risk tool 'cancel_order' requires explicit approval authorization" in res_unauthorized.error
+    assert (
+        "Execution blocked: HIGH-risk tool 'cancel_order' requires explicit approval authorization"
+        in res_unauthorized.error
+    )
 
     # 2. Direct call to request_refund without approval -> BLOCKED
     res_refund_unauth = registry.execute(
@@ -213,7 +231,11 @@ def test_high_risk_authorization_boundary_enforcement(test_db: Session):
     )
     assert res_refund_unauth.success is False
     assert res_refund_unauth.error is not None
-    assert "Execution blocked: HIGH-risk tool 'request_refund' requires explicit approval authorization" in res_refund_unauth.error
+    assert (
+        "Execution blocked: HIGH-risk tool 'request_refund' requires explicit approval "
+        "authorization"
+        in res_refund_unauth.error
+    )
 
     # 3. Call cancel_order with explicit approval -> SUCCESS
     res_authorized = registry.execute(
@@ -259,5 +281,3 @@ def test_tool_validation_error():
     assert res.success is False
     assert res.error is not None
     assert "Field required" in res.error or "validation error" in res.error.lower()
-
-

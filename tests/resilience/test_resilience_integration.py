@@ -24,9 +24,10 @@ and OpsAgent workflow:
 import time
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -34,29 +35,17 @@ from sqlalchemy.orm import Session
 import simulator
 from backend.agents.ops_agent import OpsAgent
 from backend.rag.seed_knowledge import seed_default_knowledge
-from backend.resilience import (
-    IdempotencyService,
-    RetryExecutor,
-    RetryPolicyConfig,
-    ResilientToolExecutor,
-    MaxRetriesExceededError,
-    TimeoutBudgetExceededError,
-    idempotency_service,
-    resolve_idempotency_key,
-    resolve_scope,
-    compute_request_hash,
+from backend.resilience import RetryPolicyConfig
+from backend.tools.base import (
+    RiskLevel,
+    ToolDefinition,
+    ToolRegistry,
+    ToolType,
 )
-from backend.tools.base import RiskLevel, ToolDefinition, ToolExecutionResult, ToolRegistry, ToolType
 from backend.tools.registry import create_default_tool_registry
-from backend.verification import (
-    StateVerificationService,
-    VerificationRequest,
-    VerificationResult,
-    VerificationStatus,
-    state_verification_service,
-)
+from backend.verification import VerificationStatus
 from backend.workflows.checkpoint import checkpoint_store
-from backend.workflows.state import WorkflowRunRecord, WorkflowState
+from backend.workflows.state import WorkflowState
 from database.models import (
     Customer,
     IdempotencyRecord,
@@ -65,7 +54,6 @@ from database.models import (
     OrderStatus,
     Payment,
     PaymentMethod,
-    PaymentStatus,
     Product,
 )
 
@@ -125,7 +113,9 @@ def _setup_test_order(
         amount=amount,
         payment_method=PaymentMethod.UPI,
     )
-    simulator.capture_payment(session=db, payment_id=pay.id, gateway_transaction_id=f"pay_res_{uuid.uuid4().hex[:6]}")
+    simulator.capture_payment(
+        session=db, payment_id=pay.id, gateway_transaction_id=f"pay_res_{uuid.uuid4().hex[:6]}"
+    )
     db.refresh(order)
     return cust, order, pay
 
@@ -139,9 +129,10 @@ class MockMutationInput(BaseModel):
 # 1. Successful state-changing operation
 # ==============================================================================
 
+
 def test_successful_state_changing_operation(db_session: Session):
-    """Verifies that a state-changing operation executes successfully through the resilience wrapper,
-    creates an IdempotencyRecord marked COMPLETED, and records telemetry.
+    """Verifies that a state-changing operation executes successfully through the
+    resilience wrapper, creates an IdempotencyRecord marked COMPLETED, and records telemetry.
     """
     mutation_count = 0
 
@@ -196,7 +187,10 @@ def test_successful_state_changing_operation(db_session: Session):
 # 2. Transient failure followed by success
 # ==============================================================================
 
-def test_transient_failure_followed_by_success(db_session: Session, fast_retry_policy: RetryPolicyConfig):
+
+def test_transient_failure_followed_by_success(
+    db_session: Session, fast_retry_policy: RetryPolicyConfig
+):
     """Verifies that a transient failure (e.g. OperationalError) is retried,
     eventually succeeds, and records multiple attempts and retry delays.
     """
@@ -206,7 +200,9 @@ def test_transient_failure_followed_by_success(db_session: Session, fast_retry_p
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise OperationalError("Connection dropped by database", params=None, orig=Exception("dropped"))
+            raise OperationalError(
+                "Connection dropped by database", params=None, orig=Exception("dropped")
+            )
         return {"status": "recovered", "attempts_taken": call_count}
 
     tool = ToolDefinition(
@@ -245,6 +241,7 @@ def test_transient_failure_followed_by_success(db_session: Session, fast_retry_p
 # ==============================================================================
 # 3. Retry exhaustion
 # ==============================================================================
+
 
 def test_retry_exhaustion(db_session: Session, fast_retry_policy: RetryPolicyConfig):
     """Verifies that transient errors exceeding max_attempts exhaust retries,
@@ -293,6 +290,7 @@ def test_retry_exhaustion(db_session: Session, fast_retry_policy: RetryPolicyCon
 # ==============================================================================
 # 4. Timeout budget exceeded
 # ==============================================================================
+
 
 def test_timeout_budget_exceeded(db_session: Session):
     """Verifies that exceeding the timeout budget halts retries and fails the tool."""
@@ -346,7 +344,10 @@ def test_timeout_budget_exceeded(db_session: Session):
 # 5. Non-transient exception is not retried
 # ==============================================================================
 
-def test_non_transient_exception_not_retried(db_session: Session, fast_retry_policy: RetryPolicyConfig):
+
+def test_non_transient_exception_not_retried(
+    db_session: Session, fast_retry_policy: RetryPolicyConfig
+):
     """Verifies that non-transient exceptions (ValueError, domain errors) are NOT retried."""
     call_count = 0
 
@@ -390,6 +391,7 @@ def test_non_transient_exception_not_retried(db_session: Session, fast_retry_pol
 # ==============================================================================
 # 6. Same idempotency key executes mutation only once
 # ==============================================================================
+
 
 def test_same_idempotency_key_executes_mutation_only_once(db_session: Session):
     """Verifies that multiple sequential executions with the same idempotency key
@@ -447,6 +449,7 @@ def test_same_idempotency_key_executes_mutation_only_once(db_session: Session):
 # 7. Duplicate request returns stored response
 # ==============================================================================
 
+
 def test_duplicate_request_returns_stored_response(db_session: Session):
     """Verifies that an identical request replaying the same idempotency key
     returns the exact cached payload stored from the first run.
@@ -484,6 +487,7 @@ def test_duplicate_request_returns_stored_response(db_session: Session):
 # ==============================================================================
 # 8. Same idempotency key with different request hash produces conflict
 # ==============================================================================
+
 
 def test_same_key_with_different_hash_produces_conflict(db_session: Session):
     """Verifies that presenting a different request payload with an existing idempotency key
@@ -526,6 +530,7 @@ def test_same_key_with_different_hash_produces_conflict(db_session: Session):
 # 9. Transient failure after mutation does not cause duplicate mutation
 # ==============================================================================
 
+
 def test_transient_failure_after_mutation_does_not_cause_duplicate_mutation(db_session: Session):
     """Verifies that if a mutation has completed and the idempotency record is COMPLETED,
     any subsequent replay/retry returns the cached response without running the mutation again.
@@ -566,6 +571,7 @@ def test_transient_failure_after_mutation_does_not_cause_duplicate_mutation(db_s
 # ==============================================================================
 # 10. Idempotency + retry composition works together
 # ==============================================================================
+
 
 def test_idempotency_and_retry_composition_work_together(
     db_session: Session, fast_retry_policy: RetryPolicyConfig
@@ -623,6 +629,7 @@ def test_idempotency_and_retry_composition_work_together(
 # 11. Approved action resumption uses resilience
 # ==============================================================================
 
+
 def test_approved_action_resumption_uses_resilience(db_session: Session):
     """Verifies that resuming an approved action in OpsAgent executes through
     the resilience wrapper, creating an idempotency record and persisting resilience telemetry.
@@ -669,6 +676,7 @@ def test_approved_action_resumption_uses_resilience(db_session: Session):
 # 12. D-14 verification still executes after resilient successful mutation
 # ==============================================================================
 
+
 def test_d14_verification_still_executes_after_resilient_mutation(db_session: Session):
     """Verifies that D-14 post-action verification executes and succeeds
     following a resilient tool mutation.
@@ -701,16 +709,20 @@ def test_d14_verification_still_executes_after_resilient_mutation(db_session: Se
 # 13. Verification divergence is not retried as a tool execution failure
 # ==============================================================================
 
+
 def test_verification_divergence_not_retried_as_tool_failure(db_session: Session):
-    """Verifies that when D-14 reports DIVERGENT state (tool reported success but DB state unchanged),
-    the workflow fails without automatically retrying the tool.
+    """Verifies that when D-14 reports DIVERGENT state (tool reported success but
+    DB state unchanged), the workflow fails without automatically retrying the tool.
     """
     mutation_invocations = 0
 
     _, order, _ = _setup_test_order(db_session)
 
     from backend.tools.schemas import CancelOrderInput
-    def fake_canceller(inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+
+    def fake_canceller(
+        inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         nonlocal mutation_invocations
         mutation_invocations += 1
         # Pretend tool succeeded, but do NOT actually update order status in DB!
@@ -723,14 +735,16 @@ def test_verification_divergence_not_retried_as_tool_failure(db_session: Session
 
     registry = create_default_tool_registry()
     registry._tools.pop("cancel_order", None)
-    registry.register(ToolDefinition(
-        name="cancel_order",
-        description="Cancels an order",
-        input_schema=CancelOrderInput,
-        handler=fake_canceller,
-        tool_type=ToolType.WRITE,
-        risk_level=RiskLevel.HIGH,
-    ))
+    registry.register(
+        ToolDefinition(
+            name="cancel_order",
+            description="Cancels an order",
+            input_schema=CancelOrderInput,
+            handler=fake_canceller,
+            tool_type=ToolType.WRITE,
+            risk_level=RiskLevel.HIGH,
+        )
+    )
 
     agent = OpsAgent(tool_registry=registry)
 
@@ -763,6 +777,7 @@ def test_verification_divergence_not_retried_as_tool_failure(db_session: Session
 # 14. Workflow records retry/idempotency metadata
 # ==============================================================================
 
+
 def test_workflow_records_resilience_metadata_in_checkpoints(db_session: Session):
     """Verifies that WorkflowRunRecord and checkpoints persist rich resilience metadata."""
     _, order, _ = _setup_test_order(db_session)
@@ -791,6 +806,7 @@ def test_workflow_records_resilience_metadata_in_checkpoints(db_session: Session
 # 15. Existing Phase 1-3 behavior remains unchanged
 # ==============================================================================
 
+
 def test_existing_phase1_3_read_operations_remain_unchanged(db_session: Session):
     """Verifies that Phase 1-3 read workflows (e.g. order inquiry) continue
     to execute cleanly through OpsAgent.
@@ -812,6 +828,7 @@ def test_existing_phase1_3_read_operations_remain_unchanged(db_session: Session)
 # 16. D-13 risk assessment remains unchanged
 # ==============================================================================
 
+
 def test_d13_risk_assessment_remains_unchanged(db_session: Session):
     """Verifies that high-risk requests still trigger ML risk scoring and require approval."""
     _, order, _ = _setup_test_order(db_session, amount=Decimal("9500.00"))
@@ -832,6 +849,7 @@ def test_d13_risk_assessment_remains_unchanged(db_session: Session):
 # 17. Read-only tools are not unnecessarily idempotency-wrapped
 # ==============================================================================
 
+
 def test_read_only_tools_bypass_idempotency_records(db_session: Session):
     """Verifies that ToolType.READ queries (e.g. get_order) do not generate
     IdempotencyRecord entries in the database.
@@ -839,9 +857,7 @@ def test_read_only_tools_bypass_idempotency_records(db_session: Session):
     _, order, _ = _setup_test_order(db_session)
     registry = create_default_tool_registry()
 
-    initial_count = db_session.scalar(
-        select(func.count()).select_from(IdempotencyRecord)
-    ) or 0
+    initial_count = db_session.scalar(select(func.count()).select_from(IdempotencyRecord)) or 0
 
     res = registry.execute(
         name="get_order",
@@ -855,9 +871,7 @@ def test_read_only_tools_bypass_idempotency_records(db_session: Session):
     assert res.is_cached is False
     assert res.idempotency_key is None  # Read tools do not assign idempotency keys
 
-    after_count = db_session.scalar(
-        select(func.count()).select_from(IdempotencyRecord)
-    ) or 0
+    after_count = db_session.scalar(select(func.count()).select_from(IdempotencyRecord)) or 0
 
     # No idempotency records created for read tools!
     assert after_count == initial_count

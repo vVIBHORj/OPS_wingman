@@ -3,16 +3,17 @@ Payment API Router.
 """
 
 import uuid
+
+import simulator
+from database.session import get_db
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from database.session import get_db
 from backend.api.schemas import (
     PaymentCaptureRequest,
     PaymentFailRequest,
     PaymentResponse,
 )
-import simulator
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -56,4 +57,3 @@ def fail_payment(
         error_message=payload.error_message,
     )
     return PaymentResponse.model_validate(payment)
-

@@ -3,33 +3,20 @@
 import os
 import tempfile
 import uuid
-from decimal import Decimal
 from typing import Generator
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from database.base import Base
-from database.session import get_db
-from database.models import (
-    ApprovalRecord,
-    Customer,
-    DomainEvent,
-    KnowledgeChunk,
-    KnowledgeDocument,
-    Order,
-    OrderItem,
-    Payment,
-    Product,
-    Shipment,
-    Ticket,
-)
-from backend.main import app
+import database.models  # noqa: F401
 from backend.approvals.service import ApprovalService
+from backend.main import app
 from backend.rag.seed_knowledge import seed_default_knowledge
 from backend.tools.schemas import StructuredAction
-from database.models.enums import ApprovalStatus, DocumentType, OrderStatus, PaymentMethod
+from database.base import Base
+from database.session import get_db
 
 
 @pytest.fixture(scope="function")

@@ -3,15 +3,16 @@ Product API Router.
 """
 
 import uuid
-from typing import Optional, List, Union
+from typing import List, Optional, Union
+
+from database.models import Product
+from database.session import get_db
 from fastapi import APIRouter, Depends, Query
+from simulator.exceptions import EntityNotFoundError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from database.session import get_db
-from database.models import Product
 from backend.api.schemas import ProductResponse
-from simulator.exceptions import EntityNotFoundError
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -42,4 +43,3 @@ def get_product_by_id(
     if not product:
         raise EntityNotFoundError(f"Product {product_id} not found.")
     return ProductResponse.model_validate(product)
-

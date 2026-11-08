@@ -4,24 +4,27 @@ Shipment API Router.
 
 import uuid
 from typing import Optional
+
+import simulator
+from database.session import get_db
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from database.session import get_db
 from backend.api.schemas import (
-    ShipmentStatusUpdateRequest,
     ShipmentDelayRequest,
     ShipmentDeliverRequest,
     ShipmentResponse,
+    ShipmentStatusUpdateRequest,
 )
-import simulator
 
 router = APIRouter(prefix="/shipments", tags=["Shipments"])
 
 
 @router.get("", response_model=ShipmentResponse)
 def get_shipment_by_query(
-    tracking_number: Optional[str] = Query(default=None, description="Search shipment by tracking number"),
+    tracking_number: Optional[str] = Query(
+        default=None, description="Search shipment by tracking number"
+    ),
     db: Session = Depends(get_db),
 ) -> ShipmentResponse:
     """Retrieve a shipment by query parameter."""
@@ -88,4 +91,3 @@ def deliver_shipment(
         recipient_notes=payload.recipient_notes,
     )
     return ShipmentResponse.model_validate(shipment)
-

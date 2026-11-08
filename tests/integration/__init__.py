@@ -1,1 +1,1 @@
-﻿# Package marker for tests/integration
+# Package marker for tests/integration

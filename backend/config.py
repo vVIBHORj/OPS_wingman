@@ -8,15 +8,16 @@ between safe development defaults and mandatory production validation.
 import json
 from functools import lru_cache
 from typing import Any, List, Optional, Union
+
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 DEFAULT_DEV_SECRET = "change-this-insecure-secret-key-for-local-dev-only"
 
 
 class Settings(BaseSettings):
     """Platform configuration parameters loaded from environment and .env."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -26,7 +27,9 @@ class Settings(BaseSettings):
 
     # Core Application
     app_name: str = Field(default="OpsWingman", description="Platform service name")
-    environment: str = Field(default="development", description="Runtime environment: development, staging, production")
+    environment: str = Field(
+        default="development", description="Runtime environment: development, staging, production"
+    )
     log_level: str = Field(default="INFO", description="Logging verbosity level")
     debug: bool = Field(default=False, description="Debug mode toggle; must be False in production")
 
@@ -48,20 +51,34 @@ class Settings(BaseSettings):
         description="Synchronous SQLAlchemy connection URL for Alembic and worker pools",
     )
     database_pool_size: int = Field(default=10, description="SQLAlchemy connection pool base size")
-    database_max_overflow: int = Field(default=20, description="Max overflow connections allowed beyond pool_size")
-    database_pool_timeout: int = Field(default=30, description="Seconds to wait before timing out on connection checkout")
+    database_max_overflow: int = Field(
+        default=20, description="Max overflow connections allowed beyond pool_size"
+    )
+    database_pool_timeout: int = Field(
+        default=30, description="Seconds to wait before timing out on connection checkout"
+    )
     sql_echo: bool = Field(default=False, description="Log raw SQL statements")
-    auto_migrate: bool = Field(default=True, description="Run database migrations automatically on startup")
-    wait_for_migration: bool = Field(default=False, description="Wait for database schema to reach head before serving traffic")
-    migration_wait_timeout: int = Field(default=60, description="Seconds to wait for schema readiness")
+    auto_migrate: bool = Field(
+        default=True, description="Run database migrations automatically on startup"
+    )
+    wait_for_migration: bool = Field(
+        default=False, description="Wait for database schema to reach head before serving traffic"
+    )
+    migration_wait_timeout: int = Field(
+        default=60, description="Seconds to wait for schema readiness"
+    )
 
     # Cache & Queue
     valkey_host: str = Field(default="localhost", description="Valkey/Redis hostname")
     valkey_port: int = Field(default=6379, description="Valkey/Redis port")
-    valkey_url: str = Field(default="redis://localhost:6379/0", description="Valkey/Redis connection string")
+    valkey_url: str = Field(
+        default="redis://localhost:6379/0", description="Valkey/Redis connection string"
+    )
 
     # Workflow Checkpoints
-    checkpoint_dir: str = Field(default=".data/checkpoints", description="Directory path for local agent run checkpoints")
+    checkpoint_dir: str = Field(
+        default=".data/checkpoints", description="Directory path for local agent run checkpoints"
+    )
 
     # Security & Tokens
     app_secret_key: str = Field(
@@ -69,16 +86,26 @@ class Settings(BaseSettings):
         description="Cryptographic secret key for token signing; required in production",
     )
     jwt_algorithm: str = Field(default="HS256", description="JWT hashing algorithm")
-    access_token_expire_minutes: int = Field(default=60, description="Access token expiration window")
-    docs_enabled: bool = Field(default=True, description="Expose OpenAPI documentation at /docs and /redoc")
+    access_token_expire_minutes: int = Field(
+        default=60, description="Access token expiration window"
+    )
+    docs_enabled: bool = Field(
+        default=True, description="Expose OpenAPI documentation at /docs and /redoc"
+    )
 
     # Observability & Tracing (Optional / Stubs)
     langfuse_host: Optional[str] = Field(default=None, description="Langfuse host URL")
     langfuse_public_key: Optional[str] = Field(default=None, description="Langfuse public API key")
     langfuse_secret_key: Optional[str] = Field(default=None, description="Langfuse secret API key")
-    langfuse_enable_telemetry: bool = Field(default=False, description="Send anonymous telemetry to Langfuse")
-    otel_service_name: str = Field(default="opswingman-backend", description="OpenTelemetry service name")
-    otel_exporter_otlp_endpoint: Optional[str] = Field(default=None, description="OTLP collector endpoint")
+    langfuse_enable_telemetry: bool = Field(
+        default=False, description="Send anonymous telemetry to Langfuse"
+    )
+    otel_service_name: str = Field(
+        default="opswingman-backend", description="OpenTelemetry service name"
+    )
+    otel_exporter_otlp_endpoint: Optional[str] = Field(
+        default=None, description="OTLP collector endpoint"
+    )
 
     @field_validator("backend_cors_origins", mode="before")
     @classmethod
@@ -106,7 +133,8 @@ class Settings(BaseSettings):
                 raise ValueError("DEBUG must be set to False in production environment.")
             if self.app_secret_key == DEFAULT_DEV_SECRET or len(self.app_secret_key.strip()) < 16:
                 raise ValueError(
-                    "APP_SECRET_KEY must be set to a secure, non-default secret key of at least 16 characters in production."
+                    "APP_SECRET_KEY must be set to a secure, non-default secret key of "
+                    "at least 16 characters in production."
                 )
         return self
 

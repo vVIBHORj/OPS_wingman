@@ -3,10 +3,17 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+
+from database.models import (
+    Customer,
+    Order,
+    OrderStatus,
+    PaymentStatus,
+    ShipmentStatus,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from database.models import Customer, Order, OrderStatus, Payment, PaymentStatus, Shipment, ShipmentStatus
 from backend.ml.schemas import RiskFeatureVector
 
 
@@ -21,7 +28,8 @@ class FeatureExtractor:
         total_customer_orders: int = 1,
         customer_refund_count: int = 0,
     ) -> RiskFeatureVector:
-        """Extracts RiskFeatureVector directly from entity instances without requiring active DB session."""
+        """Extracts RiskFeatureVector directly from entity instances without requiring
+        active DB session."""
         current_time = now or datetime.now(timezone.utc)
 
         # 1. Order Amount
@@ -40,7 +48,9 @@ class FeatureExtractor:
         # 3. Refund Metrics
         refund_ratio = 0.0
         if total_customer_orders > 0:
-            refund_ratio = min(1.0, max(0.0, float(customer_refund_count) / float(total_customer_orders)))
+            refund_ratio = min(
+                1.0, max(0.0, float(customer_refund_count) / float(total_customer_orders))
+            )
 
         # 4. Delivery Delay Hours
         delivery_delay_hours = 0.0
@@ -53,21 +63,30 @@ class FeatureExtractor:
                         if ref_time.tzinfo is None:
                             ref_time = ref_time.replace(tzinfo=timezone.utc)
                         delay_seconds = (current_time - ref_time).total_seconds()
-                        delivery_delay_hours = max(delivery_delay_hours, max(0.0, delay_seconds / 3600.0))
-                elif shp.status == ShipmentStatus.IN_TRANSIT and shp.estimated_delivery_date is not None:
+                        delivery_delay_hours = max(
+                            delivery_delay_hours, max(0.0, delay_seconds / 3600.0)
+                        )
+                elif (
+                    shp.status == ShipmentStatus.IN_TRANSIT
+                    and shp.estimated_delivery_date is not None
+                ):
                     est_time = shp.estimated_delivery_date
                     if est_time.tzinfo is None:
                         est_time = est_time.replace(tzinfo=timezone.utc)
                     if current_time > est_time:
                         delay_seconds = (current_time - est_time).total_seconds()
-                        delivery_delay_hours = max(delivery_delay_hours, max(0.0, delay_seconds / 3600.0))
+                        delivery_delay_hours = max(
+                            delivery_delay_hours, max(0.0, delay_seconds / 3600.0)
+                        )
 
         # 5. Payment Attempts & Failures
         payment_attempts = 1
         failed_payment_count = 0
         if order is not None and order.payments:
             payment_attempts = max(1, len(order.payments))
-            failed_payment_count = sum(1 for p in order.payments if p.status == PaymentStatus.FAILED)
+            failed_payment_count = sum(
+                1 for p in order.payments if p.status == PaymentStatus.FAILED
+            )
 
         # 6. First Order Flag
         is_first_order = total_customer_orders <= 1
@@ -99,9 +118,7 @@ class FeatureExtractor:
             pass
 
         if order is None:
-            order = session.scalar(
-                select(Order).where(Order.order_number == str(order_id))
-            )
+            order = session.scalar(select(Order).where(Order.order_number == str(order_id)))
         if order is None:
             # Return neutral baseline vector if order not found
             return RiskFeatureVector()
@@ -116,9 +133,7 @@ class FeatureExtractor:
                 select(Order).where(Order.customer_id == customer.id)
             ).all()
             total_orders = max(1, len(customer_orders))
-            refund_count = sum(
-                1 for o in customer_orders if o.status == OrderStatus.CANCELLED
-            )
+            refund_count = sum(1 for o in customer_orders if o.status == OrderStatus.CANCELLED)
 
         return cls.extract_from_entities(
             order=order,

@@ -4,26 +4,27 @@ Records domain events synchronously within the active transaction.
 """
 
 import uuid
-from decimal import Decimal
-from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database.models import (
+    Customer,
+    EventType,
     Order,
     OrderItem,
-    Customer,
-    Product,
     OrderStatus,
-    EventType,
-)
-from simulator.exceptions import (
-    EntityNotFoundError,
-    InvalidStateTransitionError,
-    BusinessRuleViolationError,
+    Product,
 )
 from simulator.events import record_event
+from simulator.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    InvalidStateTransitionError,
+)
 
 # Valid deterministic state transitions for OrderStatus
 ORDER_TRANSITIONS = {
@@ -83,7 +84,10 @@ def create_order(
     if not items:
         raise BusinessRuleViolationError("Cannot create an order with no items.")
 
-    auto_order_number = order_number or f"ORD-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    auto_order_number = (
+        order_number
+        or f"ORD-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    )
 
     subtotal = Decimal("0.00")
     order_items: List[OrderItem] = []
@@ -132,7 +136,9 @@ def create_order(
         order_items.append(order_item)
 
     tax_amount = (subtotal * tax_rate).quantize(Decimal("0.01"))
-    total_amount = (subtotal + tax_amount + shipping_amount - discount_amount).quantize(Decimal("0.01"))
+    total_amount = (subtotal + tax_amount + shipping_amount - discount_amount).quantize(
+        Decimal("0.01")
+    )
 
     if total_amount < Decimal("0.00"):
         total_amount = Decimal("0.00")
@@ -236,7 +242,11 @@ def update_order_status(
         order.cancellation_reason = reason
 
     # Record Domain Event
-    event_type = EventType.ORDER_CANCELLED if new_status == OrderStatus.CANCELLED else EventType.ORDER_STATUS_CHANGED
+    event_type = (
+        EventType.ORDER_CANCELLED
+        if new_status == OrderStatus.CANCELLED
+        else EventType.ORDER_STATUS_CHANGED
+    )
     record_event(
         session=session,
         event_type=event_type,

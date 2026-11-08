@@ -1,1 +1,1 @@
-﻿# Package marker for backend/api
+# Package marker for backend/api

@@ -5,15 +5,15 @@ Revises: 0003_rag_and_approvals
 Create Date: 2026-09-29 07:59:26.212374+00:00
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '1605711be9a0'
-down_revision: Union[str, None] = '0003_rag_and_approvals'
+revision: str = "1605711be9a0"
+down_revision: Union[str, None] = "0003_rag_and_approvals"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -32,15 +32,15 @@ def upgrade() -> None:
 
     bind = op.get_bind()
     insp = sa.inspect(bind)
-    if insp.has_table('order_items'):
-        columns = [c['name'] for c in insp.get_columns('order_items')]
-        if 'updated_at' not in columns:
+    if insp.has_table("order_items"):
+        columns = [c["name"] for c in insp.get_columns("order_items")]
+        if "updated_at" not in columns:
             op.add_column(
-                'order_items',
+                "order_items",
                 sa.Column(
-                    'updated_at',
+                    "updated_at",
                     sa.DateTime(timezone=True),
-                    server_default=sa.text('now()'),
+                    server_default=sa.text("now()"),
                     nullable=False,
                 ),
             )

@@ -3,19 +3,20 @@ Comprehensive API Integration & Unit Tests for OpsWingman Operational REST API (
 Exercises all endpoints via FastAPI TestClient over HTTP.
 """
 
+import os
+import tempfile
 import uuid
 from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-import os
-import tempfile
-from database.base import Base
-from database.session import get_db
-from database.models import Customer, Product, OrderStatus, PaymentStatus, ShipmentStatus
 from backend.main import app
+from database.base import Base
+from database.models import Customer, Product
+from database.session import get_db
 
 
 @pytest.fixture(scope="function")
@@ -89,6 +90,7 @@ def api_client():
 # 1. Base & Health Endpoints
 # ==============================================================================
 
+
 def test_api_health_and_root(api_client: TestClient):
     """Verify health check and root endpoints."""
     res_health = api_client.get("/health")
@@ -103,6 +105,7 @@ def test_api_health_and_root(api_client: TestClient):
 # ==============================================================================
 # 2. Customer & Product Endpoints
 # ==============================================================================
+
 
 def test_get_customer_by_id(api_client: TestClient):
     """Verify customer lookup endpoint."""
@@ -129,6 +132,7 @@ def test_get_products_and_sku_filter(api_client: TestClient):
 # 3. Order Endpoints & Validations
 # ==============================================================================
 
+
 def test_create_and_retrieve_order(api_client: TestClient):
     """Verify order creation and lookup by ID and order_number."""
     payload = {
@@ -145,8 +149,8 @@ def test_create_and_retrieve_order(api_client: TestClient):
     order_data = res.json()
     assert order_data["status"] == "PENDING"
     assert order_data["subtotal_amount"] == "2997.00"  # 1999 + 499*2 = 2997
-    assert order_data["tax_amount"] == "539.46"        # 18% of 2997
-    assert order_data["total_amount"] == "3586.46"     # 2997 + 539.46 + 50
+    assert order_data["tax_amount"] == "539.46"  # 18% of 2997
+    assert order_data["total_amount"] == "3586.46"  # 2997 + 539.46 + 50
     order_id = order_data["id"]
     order_number = order_data["order_number"]
 
@@ -176,7 +180,10 @@ def test_cancel_order_via_api(api_client: TestClient):
     )
     assert cancel_res.status_code == 200
     assert cancel_res.json()["status"] == "CANCELLED"
-    assert cancel_res.json()["cancellation_reason"] == "Customer requested order cancellation before processing."
+    assert (
+        cancel_res.json()["cancellation_reason"]
+        == "Customer requested order cancellation before processing."
+    )
 
 
 def test_invalid_order_transition_returns_409(api_client: TestClient):
@@ -201,26 +208,36 @@ def test_invalid_order_transition_returns_409(api_client: TestClient):
 # 4. Payment Endpoints
 # ==============================================================================
 
+
 def test_payment_creation_and_capture_flow(api_client: TestClient):
     """Verify creating and capturing a payment advances order to CONFIRMED."""
-    order_res = api_client.post("/orders", json={
-        "customer_id": "11111111-1111-4111-8111-111111111111",
-        "items": [{"sku": "SKU-API-01", "quantity": 1}],
-    })
+    order_res = api_client.post(
+        "/orders",
+        json={
+            "customer_id": "11111111-1111-4111-8111-111111111111",
+            "items": [{"sku": "SKU-API-01", "quantity": 1}],
+        },
+    )
     order_id = order_res.json()["id"]
 
     # Create Payment
-    pay_res = api_client.post(f"/orders/{order_id}/payments", json={
-        "payment_method": "UPI",
-    })
+    pay_res = api_client.post(
+        f"/orders/{order_id}/payments",
+        json={
+            "payment_method": "UPI",
+        },
+    )
     assert pay_res.status_code == 201
     payment_id = pay_res.json()["id"]
     assert pay_res.json()["status"] == "INITIATED"
 
     # Capture Payment
-    cap_res = api_client.post(f"/payments/{payment_id}/capture", json={
-        "gateway_transaction_id": "rzp_api_test_555",
-    })
+    cap_res = api_client.post(
+        f"/payments/{payment_id}/capture",
+        json={
+            "gateway_transaction_id": "rzp_api_test_555",
+        },
+    )
     assert cap_res.status_code == 200
     assert cap_res.json()["status"] == "SUCCESSFUL"
     assert cap_res.json()["gateway_transaction_id"] == "rzp_api_test_555"
@@ -233,19 +250,25 @@ def test_payment_creation_and_capture_flow(api_client: TestClient):
 
 def test_payment_failure_flow(api_client: TestClient):
     """Verify recording payment failure with error details."""
-    order_res = api_client.post("/orders", json={
-        "customer_id": "11111111-1111-4111-8111-111111111111",
-        "items": [{"sku": "SKU-API-01", "quantity": 1}],
-    })
+    order_res = api_client.post(
+        "/orders",
+        json={
+            "customer_id": "11111111-1111-4111-8111-111111111111",
+            "items": [{"sku": "SKU-API-01", "quantity": 1}],
+        },
+    )
     order_id = order_res.json()["id"]
 
     pay_res = api_client.post(f"/orders/{order_id}/payments", json={"payment_method": "CARD"})
     payment_id = pay_res.json()["id"]
 
-    fail_res = api_client.post(f"/payments/{payment_id}/fail", json={
-        "error_code": "GATEWAY_TIMEOUT",
-        "error_message": "Issuer bank timed out.",
-    })
+    fail_res = api_client.post(
+        f"/payments/{payment_id}/fail",
+        json={
+            "error_code": "GATEWAY_TIMEOUT",
+            "error_message": "Issuer bank timed out.",
+        },
+    )
     assert fail_res.status_code == 200
     assert fail_res.json()["status"] == "FAILED"
     assert fail_res.json()["error_code"] == "GATEWAY_TIMEOUT"
@@ -255,27 +278,37 @@ def test_payment_failure_flow(api_client: TestClient):
 # 5. Shipment Endpoints
 # ==============================================================================
 
+
 def test_shipment_delay_flow(api_client: TestClient):
     """Verify creating a shipment and recording a delay."""
-    order_res = api_client.post("/orders", json={
-        "customer_id": "11111111-1111-4111-8111-111111111111",
-        "items": [{"sku": "SKU-API-01", "quantity": 1}],
-    })
+    order_res = api_client.post(
+        "/orders",
+        json={
+            "customer_id": "11111111-1111-4111-8111-111111111111",
+            "items": [{"sku": "SKU-API-01", "quantity": 1}],
+        },
+    )
     order_id = order_res.json()["id"]
 
-    ship_res = api_client.post(f"/orders/{order_id}/shipments", json={
-        "carrier": "BlueDart",
-        "estimated_days": 4,
-    })
+    ship_res = api_client.post(
+        f"/orders/{order_id}/shipments",
+        json={
+            "carrier": "BlueDart",
+            "estimated_days": 4,
+        },
+    )
     assert ship_res.status_code == 201
     shipment_id = ship_res.json()["id"]
     tracking_number = ship_res.json()["tracking_number"]
 
     # Delay shipment
-    delay_res = api_client.post(f"/shipments/{shipment_id}/delay", json={
-        "delay_reason": "Severe rainfall at Hubli Hub",
-        "current_location": "BlueDart Hubli Transit Facility",
-    })
+    delay_res = api_client.post(
+        f"/shipments/{shipment_id}/delay",
+        json={
+            "delay_reason": "Severe rainfall at Hubli Hub",
+            "current_location": "BlueDart Hubli Transit Facility",
+        },
+    )
     assert delay_res.status_code == 200
     assert delay_res.json()["status"] == "DELAYED"
     assert delay_res.json()["delay_reason"] == "Severe rainfall at Hubli Hub"
@@ -288,10 +321,13 @@ def test_shipment_delay_flow(api_client: TestClient):
 
 def test_shipment_delivery_flow(api_client: TestClient):
     """Verify shipment delivery advances order to DELIVERED."""
-    order_res = api_client.post("/orders", json={
-        "customer_id": "11111111-1111-4111-8111-111111111111",
-        "items": [{"sku": "SKU-API-01", "quantity": 1}],
-    })
+    order_res = api_client.post(
+        "/orders",
+        json={
+            "customer_id": "11111111-1111-4111-8111-111111111111",
+            "items": [{"sku": "SKU-API-01", "quantity": 1}],
+        },
+    )
     order_id = order_res.json()["id"]
 
     ship_res = api_client.post(f"/orders/{order_id}/shipments", json={"carrier": "Delhivery"})
@@ -301,9 +337,12 @@ def test_shipment_delivery_flow(api_client: TestClient):
     api_client.post(f"/shipments/{shipment_id}/status", json={"status": "IN_TRANSIT"})
 
     # Deliver
-    deliv_res = api_client.post(f"/shipments/{shipment_id}/deliver", json={
-        "recipient_notes": "Delivered and signed by Aarav Mehta",
-    })
+    deliv_res = api_client.post(
+        f"/shipments/{shipment_id}/deliver",
+        json={
+            "recipient_notes": "Delivered and signed by Aarav Mehta",
+        },
+    )
     assert deliv_res.status_code == 200
     assert deliv_res.json()["status"] == "DELIVERED"
     assert deliv_res.json()["actual_delivery_date"] is not None
@@ -316,6 +355,7 @@ def test_shipment_delivery_flow(api_client: TestClient):
 # ==============================================================================
 # 6. Error Mappings (404, 409, 422)
 # ==============================================================================
+
 
 def test_entity_not_found_returns_404(api_client: TestClient):
     """Verify querying non-existent entities returns HTTP 404."""
@@ -336,10 +376,13 @@ def test_entity_not_found_returns_404(api_client: TestClient):
 
 def test_business_rule_violation_returns_422(api_client: TestClient):
     """Verify business rule violations return HTTP 422."""
-    order_res = api_client.post("/orders", json={
-        "customer_id": "11111111-1111-4111-8111-111111111111",
-        "items": [{"sku": "SKU-API-01", "quantity": 1}],
-    })
+    order_res = api_client.post(
+        "/orders",
+        json={
+            "customer_id": "11111111-1111-4111-8111-111111111111",
+            "items": [{"sku": "SKU-API-01", "quantity": 1}],
+        },
+    )
     order_id = order_res.json()["id"]
 
     # Cancel order
@@ -354,6 +397,7 @@ def test_business_rule_violation_returns_422(api_client: TestClient):
 # ==============================================================================
 # 7. Complete Canonical Scenario End-to-End API Flow
 # ==============================================================================
+
 
 def test_full_canonical_api_flow(api_client: TestClient):
     """
@@ -380,7 +424,9 @@ def test_full_canonical_api_flow(api_client: TestClient):
     assert r2.status_code == 201
     payment_id = r2.json()["id"]
 
-    r3 = api_client.post(f"/payments/{payment_id}/capture", json={"gateway_transaction_id": "rzp_flow_101"})
+    r3 = api_client.post(
+        f"/payments/{payment_id}/capture", json={"gateway_transaction_id": "rzp_flow_101"}
+    )
     assert r3.status_code == 200
     assert r3.json()["status"] == "SUCCESSFUL"
 
@@ -393,7 +439,9 @@ def test_full_canonical_api_flow(api_client: TestClient):
     assert r5.status_code == 200
 
     # 4. Deliver Shipment
-    r6 = api_client.post(f"/shipments/{shipment_id}/deliver", json={"recipient_notes": "Delivered successfully"})
+    r6 = api_client.post(
+        f"/shipments/{shipment_id}/deliver", json={"recipient_notes": "Delivered successfully"}
+    )
     assert r6.status_code == 200
     assert r6.json()["status"] == "DELIVERED"
 

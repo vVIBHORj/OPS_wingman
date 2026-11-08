@@ -12,6 +12,7 @@ Verifies:
 
 import argparse
 from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -19,10 +20,10 @@ from backend.config import Settings
 from backend.main import app
 from scripts.ops import cmd_check_config, cmd_migration_status
 
-
 # ==============================================================================
 # 1. Configuration & Security Validation Tests
 # ==============================================================================
+
 
 @pytest.fixture(autouse=True)
 def isolate_env(monkeypatch):
@@ -46,7 +47,9 @@ def test_settings_development_defaults():
 def test_cors_origins_parsing_variants():
     """Verifies parsing of CORS origins from JSON list string, comma-separated string, or list."""
     # JSON list string
-    cfg1 = Settings(backend_cors_origins='["https://app.opswingman.io", "https://admin.opswingman.io"]')
+    cfg1 = Settings(
+        backend_cors_origins='["https://app.opswingman.io", "https://admin.opswingman.io"]'
+    )
     assert cfg1.backend_cors_origins == ["https://app.opswingman.io", "https://admin.opswingman.io"]
 
     # Comma-separated string
@@ -102,6 +105,7 @@ def test_production_settings_valid():
 # 2. Health & Readiness Endpoint Tests
 # ==============================================================================
 
+
 def test_liveness_endpoints():
     """Tests /health and /health/live endpoints."""
     client = TestClient(app)
@@ -138,7 +142,9 @@ def test_readiness_probe_database_failure():
 
     with patch("backend.main.SessionLocal") as mock_session_local:
         mock_session = MagicMock()
-        mock_session.execute.side_effect = RuntimeError("Could not connect to PostgreSQL server: connection refused")
+        mock_session.execute.side_effect = RuntimeError(
+            "Could not connect to PostgreSQL server: connection refused"
+        )
         mock_session_local.return_value.__enter__.return_value = mock_session
 
         res = client.get("/health/ready")
@@ -152,6 +158,7 @@ def test_readiness_probe_database_failure():
 # ==============================================================================
 # 3. Correlation ID & Security Headers Tests
 # ==============================================================================
+
 
 def test_correlation_id_middleware_generated():
     """Verifies that requests without X-Request-ID receive a generated UUID header."""
@@ -189,6 +196,7 @@ def test_cors_preflight_response():
 # ==============================================================================
 # 4. CLI Operations Tests
 # ==============================================================================
+
 
 def test_cli_check_config():
     """Tests that ops.py check-config returns 0 for development environment."""

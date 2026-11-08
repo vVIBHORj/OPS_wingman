@@ -5,13 +5,14 @@ import tempfile
 import uuid
 from decimal import Decimal
 from typing import Generator
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.main import app
 from database.base import Base
-from database.session import get_db
 from database.models import (
     Customer,
     Order,
@@ -19,7 +20,7 @@ from database.models import (
     OrderStatus,
     Product,
 )
-from backend.main import app
+from database.session import get_db
 
 
 @pytest.fixture(scope="function")
@@ -52,6 +53,7 @@ def ml_api_db() -> Generator[Session, None, None]:
 @pytest.fixture(scope="function")
 def client(ml_api_db: Session) -> Generator[TestClient, None, None]:
     """FastAPI TestClient with overridden database session dependency."""
+
     def override_get_db() -> Generator[Session, None, None]:
         try:
             yield ml_api_db
@@ -238,7 +240,8 @@ def test_assess_risk_by_order_id(client: TestClient, ml_api_db: Session):
 
 
 def test_assess_risk_missing_identifiers_returns_400(client: TestClient):
-    """Verifies POST /risk/assess returns 400 Bad Request when neither order_id nor custom_features is provided."""
+    """Verifies POST /risk/assess returns 400 Bad Request when neither order_id nor
+    custom_features is provided."""
     response = client.post("/risk/assess", json={"action_name": "refund_order"})
 
     assert response.status_code == 400

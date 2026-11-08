@@ -1,20 +1,20 @@
 """Unit tests for IdempotencyService (Phase 4 - Deliverable D-15)."""
 
 import uuid
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from database.models import IdempotencyRecord, IdempotencyStatus
 from backend.resilience.idempotency import (
-    IdempotencyService,
     IdempotencyRecordNotFoundError,
     IdempotencyRequestHashMismatchError,
-    IdempotencyInvalidStateTransitionError,
+    IdempotencyService,
 )
+from database.models import IdempotencyRecord, IdempotencyStatus
 
 
 @pytest.fixture
@@ -23,7 +23,9 @@ def service() -> IdempotencyService:
 
 
 def test_acquire_creates_processing_record(db_session: Session, service: IdempotencyService):
-    """1. Verifies that first-time acquire creates a PROCESSING record and returns is_acquired=True."""
+    """1. Verifies that first-time acquire creates a PROCESSING record and returns
+    is_acquired=True.
+    """
     key = f"key-{uuid.uuid4().hex[:8]}"
     scope = "api:orders"
 
@@ -48,8 +50,12 @@ def test_acquire_creates_processing_record(db_session: Session, service: Idempot
     assert record.status == IdempotencyStatus.PROCESSING
 
 
-def test_second_acquire_returns_existing_processing_record(db_session: Session, service: IdempotencyService):
-    """2. Verifies that acquiring an in-flight key returns is_acquired=False with status PROCESSING."""
+def test_second_acquire_returns_existing_processing_record(
+    db_session: Session, service: IdempotencyService
+):
+    """2. Verifies that acquiring an in-flight key returns is_acquired=False with
+    status PROCESSING.
+    """
     key = f"key-{uuid.uuid4().hex[:8]}"
     scope = "api:payments"
 
@@ -65,7 +71,9 @@ def test_second_acquire_returns_existing_processing_record(db_session: Session, 
 
 
 def test_completed_record_returns_cached_response(db_session: Session, service: IdempotencyService):
-    """3. Verifies that acquiring a COMPLETED record returns cached_response without re-executing."""
+    """3. Verifies that acquiring a COMPLETED record returns cached_response
+    without re-executing.
+    """
     key = f"key-{uuid.uuid4().hex[:8]}"
     scope = "agent:refund"
     payload = {"refund_id": "rfnd_123", "amount": 2500.0, "success": True}
@@ -81,14 +89,18 @@ def test_completed_record_returns_cached_response(db_session: Session, service: 
     assert res.cached_response == payload
 
 
-def test_complete_transitions_processing_to_completed(db_session: Session, service: IdempotencyService):
+def test_complete_transitions_processing_to_completed(
+    db_session: Session, service: IdempotencyService
+):
     """4. Verifies complete() transitions PROCESSING to COMPLETED and stores payload."""
     key = f"key-{uuid.uuid4().hex[:8]}"
     scope = "api:shipments"
     payload = {"shipment_id": "shp_abc", "tracking_number": "TRK-999"}
 
     service.acquire(db_session, idempotency_key=key, scope=scope)
-    record = service.complete(db_session, idempotency_key=key, scope=scope, response_payload=payload)
+    record = service.complete(
+        db_session, idempotency_key=key, scope=scope, response_payload=payload
+    )
 
     assert record.status == IdempotencyStatus.COMPLETED
     assert record.response_payload == payload
@@ -107,7 +119,9 @@ def test_fail_transitions_processing_to_failed(db_session: Session, service: Ide
     error_payload = {"error": "Gateway Timeout", "code": 504}
 
     service.acquire(db_session, idempotency_key=key, scope=scope)
-    record = service.fail(db_session, idempotency_key=key, scope=scope, response_payload=error_payload)
+    record = service.fail(
+        db_session, idempotency_key=key, scope=scope, response_payload=error_payload
+    )
 
     assert record.status == IdempotencyStatus.FAILED
     assert record.response_payload == error_payload
@@ -119,20 +133,32 @@ def test_fail_transitions_processing_to_failed(db_session: Session, service: Ide
     assert resp.response_payload == error_payload
 
 
-def test_missing_record_on_complete_is_explicit_failure(db_session: Session, service: IdempotencyService):
+def test_missing_record_on_complete_is_explicit_failure(
+    db_session: Session, service: IdempotencyService
+):
     """6. Verifies complete() on non-existent record raises IdempotencyRecordNotFoundError."""
     with pytest.raises(IdempotencyRecordNotFoundError):
-        service.complete(db_session, idempotency_key="missing-key", scope="api:test", response_payload={})
+        service.complete(
+            db_session, idempotency_key="missing-key", scope="api:test", response_payload={}
+        )
 
 
-def test_missing_record_on_fail_is_explicit_failure(db_session: Session, service: IdempotencyService):
+def test_missing_record_on_fail_is_explicit_failure(
+    db_session: Session, service: IdempotencyService
+):
     """7. Verifies fail() on non-existent record raises IdempotencyRecordNotFoundError."""
     with pytest.raises(IdempotencyRecordNotFoundError):
-        service.fail(db_session, idempotency_key="missing-key", scope="api:test", response_payload={})
+        service.fail(
+            db_session, idempotency_key="missing-key", scope="api:test", response_payload={}
+        )
 
 
-def test_same_key_different_scopes_are_independent(db_session: Session, service: IdempotencyService):
-    """8. Verifies that identical keys in different scopes can be acquired and completed independently."""
+def test_same_key_different_scopes_are_independent(
+    db_session: Session, service: IdempotencyService
+):
+    """8. Verifies that identical keys in different scopes can be acquired and
+    completed independently.
+    """
     shared_key = f"shared-{uuid.uuid4().hex[:8]}"
     scope_a = "webhook:razorpay"
     scope_b = "api:cancellation"
@@ -143,8 +169,12 @@ def test_same_key_different_scopes_are_independent(db_session: Session, service:
     assert res_a.is_acquired is True
     assert res_b.is_acquired is True
 
-    service.complete(db_session, idempotency_key=shared_key, scope=scope_a, response_payload={"source": "a"})
-    service.complete(db_session, idempotency_key=shared_key, scope=scope_b, response_payload={"source": "b"})
+    service.complete(
+        db_session, idempotency_key=shared_key, scope=scope_a, response_payload={"source": "a"}
+    )
+    service.complete(
+        db_session, idempotency_key=shared_key, scope=scope_b, response_payload={"source": "b"}
+    )
 
     get_a = service.get(db_session, idempotency_key=shared_key, scope=scope_a)
     get_b = service.get(db_session, idempotency_key=shared_key, scope=scope_b)
@@ -168,7 +198,9 @@ def test_request_hash_is_persisted(db_session: Session, service: IdempotencyServ
 
 
 def test_request_hash_conflict_is_rejected(db_session: Session, service: IdempotencyService):
-    """10. Verifies attempting to reuse key with a conflicting request_hash raises IdempotencyRequestHashMismatchError."""
+    """10. Verifies attempting to reuse key with a conflicting request_hash raises
+    IdempotencyRequestHashMismatchError.
+    """
     key = f"key-{uuid.uuid4().hex[:8]}"
     scope = "api:payments"
 
@@ -180,7 +212,9 @@ def test_request_hash_conflict_is_rejected(db_session: Session, service: Idempot
     assert "previously registered with a different request hash" in str(exc_info.value)
 
 
-def test_duplicate_acquisition_does_not_create_two_records(db_session: Session, service: IdempotencyService):
+def test_duplicate_acquisition_does_not_create_two_records(
+    db_session: Session, service: IdempotencyService
+):
     """11. Verifies database contains exactly one record after multiple acquisition attempts."""
     key = f"key-{uuid.uuid4().hex[:8]}"
     scope = "api:actions"
@@ -248,7 +282,9 @@ def test_expiration_handling(db_session: Session, service: IdempotencyService):
 
 
 def test_concurrent_acquisition_handling(db_session: Session, service: IdempotencyService):
-    """14. Verifies graceful recovery and session rollback when an IntegrityError simulates a race condition."""
+    """14. Verifies graceful recovery and session rollback when an IntegrityError
+    simulates a race condition.
+    """
     key = f"race-key-{uuid.uuid4().hex[:8]}"
     scope = "api:race"
 

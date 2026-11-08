@@ -1,9 +1,12 @@
-"""Approval Record database model for OpsWingman Human Approval Queue (Phase 3 - Deliverable D-12)."""
+"""Approval Record database model for OpsWingman Human Approval Queue
+(Phase 3 - Deliverable D-12)."""
 
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from sqlalchemy import DateTime, Enum as SQLEnum, Index, JSON, String, Text
+
+from sqlalchemy import JSON, DateTime, Index, String, Text
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -18,8 +21,12 @@ class ApprovalRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "approval_records"
 
-    approval_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False, default=lambda: str(uuid.uuid4()))
-    run_id: Mapped[str] = mapped_column(String(100), index=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    approval_id: Mapped[str] = mapped_column(
+        String(100), unique=True, index=True, nullable=False, default=lambda: str(uuid.uuid4())
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(100), index=True, nullable=False, default=lambda: str(uuid.uuid4())
+    )
     workflow_id: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     risk_level: Mapped[str] = mapped_column(String(20), default="HIGH", nullable=False)
@@ -46,9 +53,7 @@ class ApprovalRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     citations: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
 
-    __table_args__ = (
-        Index("ix_approvals_status_requested", "status", "requested_at"),
-    )
+    __table_args__ = (Index("ix_approvals_status_requested", "status", "requested_at"),)
 
     def __init__(self, **kwargs: Any) -> None:
         if "action_name" in kwargs and "action" not in kwargs:
@@ -87,4 +92,7 @@ class ApprovalRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         status_val = self.status.value if hasattr(self.status, "value") else str(self.status)
-        return f"<ApprovalRecord(id='{self.approval_id}', action='{self.action}', risk='{self.risk_level}', status='{status_val}')>"
+        return (
+            f"<ApprovalRecord(id='{self.approval_id}', action='{self.action}', "
+            f"risk='{self.risk_level}', status='{status_val}')>"
+        )

@@ -2,10 +2,12 @@
 Customer database model.
 """
 
-from typing import List, TYPE_CHECKING, Optional
-from sqlalchemy import String, Index
+from typing import TYPE_CHECKING, List, Optional
+
+from sqlalchemy import Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from database.base import Base, UUIDPrimaryKeyMixin, TimestampMixin
+
+from database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from database.models.order import Order
@@ -17,6 +19,7 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     Represents an individual or business buyer.
     Ground truth entity for customer identification and contact history.
     """
+
     __tablename__ = "customers"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
@@ -42,9 +45,10 @@ class Customer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         lazy="selectin",
     )
 
-    __table_args__ = (
-        Index("ix_customers_name", "first_name", "last_name"),
-    )
+    __table_args__ = (Index("ix_customers_name", "first_name", "last_name"),)
 
     def __repr__(self) -> str:
-        return f"<Customer(id={self.id}, email='{self.email}', name='{self.first_name} {self.last_name}')>"
+        return (
+            f"<Customer(id={self.id}, email='{self.email}', "
+            f"name='{self.first_name} {self.last_name}')>"
+        )

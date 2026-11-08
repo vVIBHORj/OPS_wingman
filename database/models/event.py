@@ -4,17 +4,19 @@ Provides an immutable audit log of domain state transitions.
 """
 
 import uuid
-from enum import Enum
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from sqlalchemy import String, DateTime, Index, JSON, func
+from enum import Enum
+from typing import Any, Dict, Optional
+
+from sqlalchemy import JSON, DateTime, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from database.base import Base, GUID, UUIDPrimaryKeyMixin
+from database.base import GUID, Base, UUIDPrimaryKeyMixin
 
 
 class EventType(str, Enum):
     """Canonical domain event types for OpsWingman."""
+
     # Order Events
     ORDER_CREATED = "ORDER_CREATED"
     ORDER_STATUS_CHANGED = "ORDER_STATUS_CHANGED"
@@ -38,6 +40,7 @@ class DomainEvent(Base, UUIDPrimaryKeyMixin):
     Persistent record of a domain state change.
     Events are recorded within the same database transaction as the business operation.
     """
+
     __tablename__ = "domain_events"
 
     event_type: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
@@ -66,4 +69,7 @@ class DomainEvent(Base, UUIDPrimaryKeyMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<DomainEvent(id={self.id}, type='{self.event_type}', entity='{self.entity_type}:{self.entity_id}', occurred_at='{self.occurred_at}')>"
+        return (
+            f"<DomainEvent(id={self.id}, type='{self.event_type}', "
+            f"entity='{self.entity_type}:{self.entity_id}', occurred_at='{self.occurred_at}')>"
+        )

@@ -11,28 +11,29 @@ Generates reproducible ground truth entities supporting 6 core operational scena
 """
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import List, Tuple
+from typing import Tuple
+
 from sqlalchemy.orm import Session
-from database.base import Base
-from database.session import SessionLocal, get_sync_engine
+
 from database.models import (
     Customer,
-    Product,
     Order,
     OrderItem,
-    Payment,
-    Shipment,
-    Ticket,
     OrderStatus,
-    PaymentStatus,
+    Payment,
     PaymentMethod,
+    PaymentStatus,
+    Product,
+    Shipment,
     ShipmentStatus,
-    TicketStatus,
-    TicketPriority,
+    Ticket,
     TicketChannel,
+    TicketPriority,
+    TicketStatus,
 )
+from database.session import SessionLocal
 
 # Fixed Deterministic UUIDs for reference in tests and verification
 CUSTOMER_ROHAN_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
@@ -273,7 +274,9 @@ def create_seed_data(session: Session) -> Tuple[int, int, int, int, int, int]:
             customer_id=CUSTOMER_PRIYA_ID,
             order_id=ORDER_NORMAL_ID,
             title="Invoice download copy request for ORD-2026-1001",
-            description="Could you please provide the GST tax invoice copy for my recent earbuds order?",
+            description=(
+                "Could you please provide the GST tax invoice copy for my recent earbuds order?"
+            ),
             channel=TicketChannel.EMAIL,
             status=TicketStatus.RESOLVED,
             priority=TicketPriority.LOW,
@@ -356,7 +359,10 @@ def create_seed_data(session: Session) -> Tuple[int, int, int, int, int, int]:
             customer_id=CUSTOMER_AMIT_ID,
             order_id=ORDER_DELAYED_ID,
             title="Shipment ETA exceeded for order ORD-2026-1002",
-            description="My keyboard was scheduled for delivery 3 days ago. BlueDart tracking shows no movement for 48 hours. Please update delivery ETA.",
+            description=(
+                "My keyboard was scheduled for delivery 3 days ago. BlueDart tracking shows no "
+                "movement for 48 hours. Please update delivery ETA."
+            ),
             channel=TicketChannel.EMAIL,
             status=TicketStatus.OPEN,
             priority=TicketPriority.HIGH,
@@ -388,7 +394,9 @@ def create_seed_data(session: Session) -> Tuple[int, int, int, int, int, int]:
         shipping_state="Telangana",
         shipping_pincode="500033",
         shipping_country="IN",
-        cancellation_reason="Customer requested cancellation before dispatch due to change in delivery address.",
+        cancellation_reason=(
+            "Customer requested cancellation before dispatch due to change in delivery address."
+        ),
         created_at=now - timedelta(days=4),
         updated_at=now - timedelta(days=3),
     )
@@ -424,7 +432,10 @@ def create_seed_data(session: Session) -> Tuple[int, int, int, int, int, int]:
             customer_id=CUSTOMER_ANANYA_ID,
             order_id=ORDER_CANCELLED_ID,
             title="Cancellation confirmation request for ORD-2026-1003",
-            description="I requested cancellation yesterday. Please verify that the order has been cancelled and initiate refund.",
+            description=(
+                "I requested cancellation yesterday. Please verify that the order has been "
+                "cancelled and initiate refund."
+            ),
             channel=TicketChannel.WHATSAPP,
             status=TicketStatus.IN_PROGRESS,
             priority=TicketPriority.MEDIUM,
@@ -493,7 +504,10 @@ def create_seed_data(session: Session) -> Tuple[int, int, int, int, int, int]:
             customer_id=CUSTOMER_VIKRAM_ID,
             order_id=ORDER_FAILED_PAYMENT_ID,
             title="Money debited from bank but order shows payment failed",
-            description="Bank debited INR 4,128.82 from my HDFC account, but website says payment failed. Please check transaction reference PAY-NET-1004.",
+            description=(
+                "Bank debited INR 4,128.82 from my HDFC account, but website says payment failed. "
+                "Please check transaction reference PAY-NET-1004."
+            ),
             channel=TicketChannel.PORTAL,
             status=TicketStatus.OPEN,
             priority=TicketPriority.URGENT,
@@ -650,7 +664,7 @@ def seed_database():
             return
 
         c_count, p_count, o_count, oi_count, pay_count, s_count = create_seed_data(session)
-        print(f"Successfully seeded database:")
+        print("Successfully seeded database:")
         print(f"  - Customers: {c_count}")
         print(f"  - Products: {p_count}")
         print(f"  - Orders: {o_count} (6 Scenarios)")

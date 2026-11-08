@@ -2,25 +2,24 @@
 
 import asyncio
 from typing import List
+
 import pytest
 from pydantic import ValidationError
 
-from backend.resilience.schemas import (
-    RetryPolicyConfig,
-    ExecutionAttemptResult,
-)
 from backend.resilience.retry import (
-    RetryExecutor,
     MaxRetriesExceededError,
+    RetryExecutor,
     TimeoutBudgetExceededError,
     calculate_backoff_delay,
-    is_transient_error,
 )
-
+from backend.resilience.schemas import (
+    RetryPolicyConfig,
+)
 
 # ==============================================================================
 # Helpers / Test Clocks
 # ==============================================================================
+
 
 class FakeClock:
     """Deterministic simulated clock for testing backoff and timeout budgets without sleeping."""
@@ -43,6 +42,7 @@ class FakeClock:
 # ==============================================================================
 # Unit Tests
 # ==============================================================================
+
 
 def test_successful_first_attempt():
     """1. Verifies a successful operation executes once immediately without retries or sleeping."""
@@ -203,7 +203,9 @@ def test_jitter_never_produces_negative_delay():
 
 
 def test_timeout_budget_stops_retries():
-    """9. Verifies total timeout budget aborts further retries and raises TimeoutBudgetExceededError."""
+    """9. Verifies total timeout budget aborts further retries and raises
+    TimeoutBudgetExceededError.
+    """
     clock = FakeClock()
     executor = RetryExecutor()
     calls = 0
@@ -215,7 +217,8 @@ def test_timeout_budget_stops_retries():
         clock.current_time += 4.0
         raise ConnectionError("Slow failing network call")
 
-    # Total timeout budget is 5.0 seconds. Attempt 1 takes 4.0s. Delay is 2.0s -> total 6.0s > 5.0s budget
+    # Total timeout budget is 5.0 seconds. Attempt 1 takes 4.0s. Delay is 2.0s
+    # -> total 6.0s > 5.0s budget
     policy = RetryPolicyConfig(
         max_attempts=10,
         initial_delay_seconds=2.0,
@@ -388,6 +391,7 @@ def test_zero_invalid_policy_values_are_rejected():
 
 def test_async_execute_retry_behavior():
     """16. Verifies async_execute handles coroutines with exponential backoff and retries."""
+
     async def _run():
         clock = FakeClock()
         executor = RetryExecutor()
@@ -400,7 +404,9 @@ def test_async_execute_retry_behavior():
                 raise ConnectionRefusedError(f"Async connection refused {calls}")
             return "async_success"
 
-        policy = RetryPolicyConfig(max_attempts=4, initial_delay_seconds=0.2, backoff_multiplier=2.0)
+        policy = RetryPolicyConfig(
+            max_attempts=4, initial_delay_seconds=0.2, backoff_multiplier=2.0
+        )
         result = await executor.async_execute(
             async_op,
             policy=policy,
@@ -415,4 +421,3 @@ def test_async_execute_retry_behavior():
         assert clock.sleep_calls[1] == 0.4
 
     asyncio.run(_run())
-

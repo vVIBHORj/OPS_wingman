@@ -2,7 +2,8 @@
 
 Validates the complete composition of:
 Request -> Planning -> Resilience/Idempotency -> ML Risk Assessment ->
-Policy Evaluation -> Approval Gate -> Resumed Execution -> Post-Action Verification -> Final Response.
+Policy Evaluation -> Approval Gate -> Resumed Execution ->
+Post-Action Verification -> Final Response.
 
 Failure Matrix:
 1. transient failure -> retry -> success
@@ -25,11 +26,12 @@ Failure Matrix:
 import time
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock
+
 import pytest
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import simulator
@@ -41,27 +43,18 @@ from backend.ml import (
     RiskBand,
     RiskFeatureVector,
 )
-from backend.policies.schemas import PolicyEvaluationResult
 from backend.rag.seed_knowledge import seed_default_knowledge
-from backend.resilience import (
-    IdempotencyService,
-    MaxRetriesExceededError,
-    ResilientToolExecutor,
-    RetryExecutor,
-    RetryPolicyConfig,
-    TimeoutBudgetExceededError,
-)
+from backend.resilience import RetryPolicyConfig
 from backend.tools.base import RiskLevel, ToolDefinition, ToolRegistry, ToolType
 from backend.tools.registry import create_default_tool_registry
-from backend.tools.schemas import CancelOrderInput, RequestRefundInput
+from backend.tools.schemas import CancelOrderInput
 from backend.verification import (
     StateVerificationService,
     VerificationRequest,
-    VerificationResult,
     VerificationStatus,
 )
 from backend.workflows.checkpoint import checkpoint_store
-from backend.workflows.state import StructuredAction, WorkflowRunRecord, WorkflowState
+from backend.workflows.state import WorkflowState
 from database.models import (
     Customer,
     IdempotencyRecord,
@@ -70,7 +63,6 @@ from database.models import (
     OrderStatus,
     Payment,
     PaymentMethod,
-    PaymentStatus,
     Product,
 )
 
@@ -130,7 +122,9 @@ def _setup_order(
         amount=amount,
         payment_method=PaymentMethod.UPI,
     )
-    simulator.capture_payment(session=db, payment_id=pay.id, gateway_transaction_id=f"pay_hard_{uuid.uuid4().hex[:6]}")
+    simulator.capture_payment(
+        session=db, payment_id=pay.id, gateway_transaction_id=f"pay_hard_{uuid.uuid4().hex[:6]}"
+    )
     db.refresh(order)
     return cust, order, pay
 
@@ -143,6 +137,7 @@ class MockOrderMutationInput(BaseModel):
 # ==============================================================================
 # 1. Transient failure -> retry -> success
 # ==============================================================================
+
 
 def test_transient_failure_retry_success(db_session: Session, fast_retry_policy: RetryPolicyConfig):
     """Verifies that transient errors (ConnectionError) trigger retry and succeed on attempt 2."""
@@ -181,7 +176,9 @@ def test_transient_failure_retry_success(db_session: Session, fast_retry_policy:
     assert res.data["result"] == "success"
 
     # Idempotency record is COMPLETED
-    rec = db_session.scalar(select(IdempotencyRecord).where(IdempotencyRecord.idempotency_key == key))
+    rec = db_session.scalar(
+        select(IdempotencyRecord).where(IdempotencyRecord.idempotency_key == key)
+    )
     assert rec is not None
     assert rec.status == IdempotencyStatus.COMPLETED
 
@@ -190,8 +187,13 @@ def test_transient_failure_retry_success(db_session: Session, fast_retry_policy:
 # 2. Transient failure -> retry exhaustion
 # ==============================================================================
 
-def test_transient_failure_retry_exhaustion(db_session: Session, fast_retry_policy: RetryPolicyConfig):
-    """Verifies that permanent transient failure exhausts all retries and results in structured failure."""
+
+def test_transient_failure_retry_exhaustion(
+    db_session: Session, fast_retry_policy: RetryPolicyConfig
+):
+    """Verifies that permanent transient failure exhausts all retries and results
+    in structured failure.
+    """
     call_count = 0
 
     def always_transient(order_id: str, action_notes: str = "note") -> Dict[str, Any]:
@@ -225,7 +227,9 @@ def test_transient_failure_retry_exhaustion(db_session: Session, fast_retry_poli
     assert res.resilience_metadata is not None
     assert res.resilience_metadata.get("final_status") == "FAILED"
 
-    rec = db_session.scalar(select(IdempotencyRecord).where(IdempotencyRecord.idempotency_key == key))
+    rec = db_session.scalar(
+        select(IdempotencyRecord).where(IdempotencyRecord.idempotency_key == key)
+    )
     assert rec is not None
     assert rec.status == IdempotencyStatus.FAILED
 
@@ -233,6 +237,7 @@ def test_transient_failure_retry_exhaustion(db_session: Session, fast_retry_poli
 # ==============================================================================
 # 3. Timeout budget exceeded
 # ==============================================================================
+
 
 def test_timeout_budget_exceeded(db_session: Session):
     """Verifies that exceeding the timeout budget stops retrying and fails gracefully."""
@@ -272,15 +277,21 @@ def test_timeout_budget_exceeded(db_session: Session):
     assert res.error is not None
     assert "timeout" in res.error.lower()
     assert res.resilience_metadata is not None
-    assert res.resilience_metadata.get("timed_out") is True or res.resilience_metadata.get("timeout_occurred") is True
+    assert (
+        res.resilience_metadata.get("timed_out") is True
+        or res.resilience_metadata.get("timeout_occurred") is True
+    )
 
 
 # ==============================================================================
 # 4. Non-transient failure -> no retry
 # ==============================================================================
 
+
 def test_non_transient_failure_no_retry(db_session: Session, fast_retry_policy: RetryPolicyConfig):
-    """Verifies that non-transient validation errors fail immediately on attempt 1 without retries."""
+    """Verifies that non-transient validation errors fail immediately on attempt 1
+    without retries.
+    """
     call_count = 0
 
     def validation_error(order_id: str, action_notes: str = "note") -> Dict[str, Any]:
@@ -317,8 +328,11 @@ def test_non_transient_failure_no_retry(db_session: Session, fast_retry_policy: 
 # 5. Duplicate idempotency key -> no second mutation
 # ==============================================================================
 
+
 def test_duplicate_idempotency_key_no_second_mutation(db_session: Session):
-    """Verifies that replaying the same idempotency key returns cached output without second mutation."""
+    """Verifies that replaying the same idempotency key returns cached output
+    without second mutation.
+    """
     mutation_count = 0
 
     def counting_mutation(order_id: str, action_notes: str = "note") -> Dict[str, Any]:
@@ -357,6 +371,7 @@ def test_duplicate_idempotency_key_no_second_mutation(db_session: Session):
 # 6. Approved action resumed twice -> only one mutation
 # ==============================================================================
 
+
 def test_approved_action_resumed_twice_only_one_mutation(db_session: Session):
     """Verifies that resuming an approved action twice fails gracefully on the second call
     and only executes the mutation once.
@@ -374,7 +389,8 @@ def test_approved_action_resumed_twice_only_one_mutation(db_session: Session):
     assert resumed1.state == WorkflowState.COMPLETED
     assert len(resumed1.resilience_records) >= 1
 
-    # Step 3: Second resume on already completed workflow raises ValueError and executes zero mutations
+    # Step 3: Second resume on already completed workflow raises ValueError and executes
+    # zero mutations
     with pytest.raises(ValueError, match="is in state 'COMPLETED', not WAITING_FOR_APPROVAL"):
         agent.resume(run_id=run_id, approved=True, db=db_session, reason="Operator approved again")
 
@@ -387,6 +403,7 @@ def test_approved_action_resumed_twice_only_one_mutation(db_session: Session):
 # 7. Tool reports success but DB state unchanged -> DIVERGENT
 # ==============================================================================
 
+
 def test_tool_reports_success_but_db_unchanged_divergent(db_session: Session):
     """Verifies that when a tool reports success but leaves DB state unchanged,
     D-14 flags DIVERGENT and workflow fails without retrying the tool.
@@ -397,7 +414,10 @@ def test_tool_reports_success_but_db_unchanged_divergent(db_session: Session):
     registry._tools.pop("cancel_order", None)
 
     call_count = 0
-    def fake_canceller(inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+
+    def fake_canceller(
+        inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         nonlocal call_count
         call_count += 1
         # Pretend success without modifying DB
@@ -408,14 +428,16 @@ def test_tool_reports_success_but_db_unchanged_divergent(db_session: Session):
             "cancellation_reason": inputs.reason,
         }
 
-    registry.register(ToolDefinition(
-        name="cancel_order",
-        description="Fakes cancellation",
-        input_schema=CancelOrderInput,
-        handler=fake_canceller,
-        tool_type=ToolType.WRITE,
-        risk_level=RiskLevel.HIGH,
-    ))
+    registry.register(
+        ToolDefinition(
+            name="cancel_order",
+            description="Fakes cancellation",
+            input_schema=CancelOrderInput,
+            handler=fake_canceller,
+            tool_type=ToolType.WRITE,
+            risk_level=RiskLevel.HIGH,
+        )
+    )
 
     agent = OpsAgent(tool_registry=registry)
     run = agent.run(input_text=f"Please cancel my order {order.order_number}", db=db_session)
@@ -423,7 +445,10 @@ def test_tool_reports_success_but_db_unchanged_divergent(db_session: Session):
 
     resumed = agent.resume(run_id=run.run_id, approved=True, db=db_session)
     assert resumed.state == WorkflowState.FAILED
-    assert "divergent" in (resumed.error or "").lower() or "verification" in (resumed.error or "").lower()
+    assert (
+        "divergent" in (resumed.error or "").lower()
+        or "verification" in (resumed.error or "").lower()
+    )
     assert len(resumed.verification_results) == 1
     assert resumed.verification_results[0]["status"] == VerificationStatus.DIVERGENT.value
     # Crucial: Tool was NOT retried on verification failure
@@ -433,6 +458,7 @@ def test_tool_reports_success_but_db_unchanged_divergent(db_session: Session):
 # ==============================================================================
 # 8. Target entity missing -> NOT_FOUND
 # ==============================================================================
+
 
 def test_target_entity_missing_not_found(db_session: Session):
     """Verifies that verifying a non-existent entity returns NOT_FOUND status."""
@@ -455,6 +481,7 @@ def test_target_entity_missing_not_found(db_session: Session):
 # ==============================================================================
 # 9. Verification query error -> ERROR
 # ==============================================================================
+
 
 def test_verification_query_error(db_session: Session):
     """Verifies that database errors during verification return status ERROR without crashing."""
@@ -480,6 +507,7 @@ def test_verification_query_error(db_session: Session):
 # ==============================================================================
 # 10. High ML risk -> policy approval gate
 # ==============================================================================
+
 
 def test_high_ml_risk_triggers_policy_approval_gate(db_session: Session):
     """Verifies that an order evaluated as HIGH ML risk triggers human approval gate."""
@@ -511,6 +539,7 @@ def test_high_ml_risk_triggers_policy_approval_gate(db_session: Session):
 # ==============================================================================
 # 11. ML anomaly -> policy approval gate
 # ==============================================================================
+
 
 def test_ml_anomaly_triggers_policy_approval_gate(db_session: Session):
     """Verifies that an operational anomaly (e.g. multiple failed payments or severe delay)
@@ -551,12 +580,15 @@ def test_ml_anomaly_triggers_policy_approval_gate(db_session: Session):
 # 12. Low risk + normal operation -> existing policy behavior preserved
 # ==============================================================================
 
+
 def test_low_risk_normal_operation_preserves_policy(db_session: Session):
     """Verifies that low-risk read inquiries complete without approval gates."""
     _, order, _ = _setup_order(db_session, amount=Decimal("500.00"))
     agent = OpsAgent()
 
-    run = agent.run(input_text=f"What is the status of my order {order.order_number}?", db=db_session)
+    run = agent.run(
+        input_text=f"What is the status of my order {order.order_number}?", db=db_session
+    )
     assert run.state == WorkflowState.COMPLETED
     assert run.approval_id is None
     assert run.final_response is not None
@@ -567,6 +599,7 @@ def test_low_risk_normal_operation_preserves_policy(db_session: Session):
 # 13. Risk assessment failure -> safe/defined policy behavior
 # ==============================================================================
 
+
 def test_risk_assessment_failure_safe_defined_behavior(db_session: Session):
     """Verifies that if the ML risk model crashes unexpectedly, the agent falls back
     to a safe defined risk assessment and policy evaluation continues safely.
@@ -574,8 +607,12 @@ def test_risk_assessment_failure_safe_defined_behavior(db_session: Session):
     _, order, _ = _setup_order(db_session, amount=Decimal("1200.00"))
 
     broken_risk_service = MagicMock(spec=MLRiskService)
-    broken_risk_service.assess_order.side_effect = RuntimeError("ML engine GPU memory allocation error")
-    broken_risk_service.assess_risk.side_effect = RuntimeError("ML engine GPU memory allocation error")
+    broken_risk_service.assess_order.side_effect = RuntimeError(
+        "ML engine GPU memory allocation error"
+    )
+    broken_risk_service.assess_risk.side_effect = RuntimeError(
+        "ML engine GPU memory allocation error"
+    )
 
     agent = OpsAgent(risk_service=broken_risk_service)
     # Cancellation still requires approval under POL-CAN-001 for state-changing action,
@@ -591,7 +628,10 @@ def test_risk_assessment_failure_safe_defined_behavior(db_session: Session):
 # 14. Retry failure followed by workflow failure -> no false verification success
 # ==============================================================================
 
-def test_retry_failure_prevents_false_verification_success(db_session: Session, fast_retry_policy: RetryPolicyConfig):
+
+def test_retry_failure_prevents_false_verification_success(
+    db_session: Session, fast_retry_policy: RetryPolicyConfig
+):
     """Verifies that when tool execution fails (e.g. retry exhaustion),
     post-action verification is NOT reported as verified.
     """
@@ -600,17 +640,21 @@ def test_retry_failure_prevents_false_verification_success(db_session: Session, 
     registry = create_default_tool_registry()
     registry._tools.pop("cancel_order", None)
 
-    def failing_canceller(inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def failing_canceller(
+        inputs: CancelOrderInput, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         raise ConnectionError("Payment gateway network dropped connection")
 
-    registry.register(ToolDefinition(
-        name="cancel_order",
-        description="Failing canceller",
-        input_schema=CancelOrderInput,
-        handler=failing_canceller,
-        tool_type=ToolType.WRITE,
-        risk_level=RiskLevel.HIGH,
-    ))
+    registry.register(
+        ToolDefinition(
+            name="cancel_order",
+            description="Failing canceller",
+            input_schema=CancelOrderInput,
+            handler=failing_canceller,
+            tool_type=ToolType.WRITE,
+            risk_level=RiskLevel.HIGH,
+        )
+    )
 
     agent = OpsAgent(tool_registry=registry)
     run = agent.run(input_text=f"Please cancel my order {order.order_number}", db=db_session)
@@ -626,6 +670,7 @@ def test_retry_failure_prevents_false_verification_success(db_session: Session, 
 # 15. Successful mutation -> verification -> COMPLETED
 # ==============================================================================
 
+
 def test_successful_mutation_verification_completed(db_session: Session):
     """Verifies the complete happy path:
     Request -> Approval -> Resilient execution -> State verification -> COMPLETED.
@@ -639,7 +684,9 @@ def test_successful_mutation_verification_completed(db_session: Session):
     assert run.approval_id is not None
 
     # Step 2: Resume
-    resumed = agent.resume(run_id=run.run_id, approved=True, db=db_session, reason="Valid customer request")
+    resumed = agent.resume(
+        run_id=run.run_id, approved=True, db=db_session, reason="Valid customer request"
+    )
     assert resumed.state == WorkflowState.COMPLETED
     assert len(resumed.resilience_records) >= 1
     assert len(resumed.verification_results) == 1

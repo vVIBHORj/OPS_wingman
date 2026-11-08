@@ -1,1 +1,1 @@
-﻿# Package marker for tests/unit
+# Package marker for tests/unit

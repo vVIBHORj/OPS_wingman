@@ -6,6 +6,8 @@ Exposes endpoints for querying, approving, and rejecting human-in-the-loop actio
 from typing import List, Optional
 from uuid import UUID
 
+from database.models.enums import ApprovalStatus
+from database.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -17,15 +19,15 @@ from backend.approvals.schemas import (
 )
 from backend.approvals.service import ApprovalService
 from backend.workflows.state import WorkflowState
-from database.models.enums import ApprovalStatus
-from database.session import get_db
 
 router = APIRouter(prefix="/approvals", tags=["Human Approvals"])
 
 
 @router.get("", response_model=List[ApprovalResponse])
 def list_approvals(
-    status_filter: Optional[ApprovalStatus] = Query(default=None, alias="status", description="Filter by approval status"),
+    status_filter: Optional[ApprovalStatus] = Query(
+        default=None, alias="status", description="Filter by approval status"
+    ),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -115,8 +117,6 @@ def reject_request(
             approved=False,
             reason=reason,
         )
-
-
 
     # Refresh record
     db.refresh(record)

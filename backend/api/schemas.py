@@ -3,22 +3,22 @@ Pydantic Request and Response Schemas for OpsWingman Operational REST API.
 """
 
 import uuid
-from decimal import Decimal
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, ConfigDict, Field
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
 from database.models.enums import (
     OrderStatus,
-    PaymentStatus,
     PaymentMethod,
+    PaymentStatus,
     ShipmentStatus,
 )
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ==============================================================================
 # Customer Schemas
 # ==============================================================================
+
 
 class CustomerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -40,6 +40,7 @@ class CustomerResponse(BaseModel):
 # Product Schemas
 # ==============================================================================
 
+
 class ProductResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,6 +60,7 @@ class ProductResponse(BaseModel):
 # ==============================================================================
 # Order Schemas
 # ==============================================================================
+
 
 class OrderItemCreate(BaseModel):
     sku: Optional[str] = None
@@ -130,6 +132,7 @@ class OrderResponse(BaseModel):
 # Payment Schemas
 # ==============================================================================
 
+
 class PaymentCreateRequest(BaseModel):
     amount: Optional[Decimal] = Field(default=None, gt=Decimal("0.00"))
     payment_method: PaymentMethod = PaymentMethod.UPI
@@ -166,6 +169,7 @@ class PaymentResponse(BaseModel):
 # ==============================================================================
 # Shipment Schemas
 # ==============================================================================
+
 
 class ShipmentCreateRequest(BaseModel):
     carrier: str = Field(default="Delhivery", min_length=1)
@@ -212,6 +216,7 @@ class ShipmentResponse(BaseModel):
 # Domain Event Schemas
 # ==============================================================================
 
+
 class EventResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -230,8 +235,11 @@ class EventResponse(BaseModel):
 # Agent & Workflow Schemas (Phase 2)
 # ==============================================================================
 
+
 class AgentRunRequest(BaseModel):
-    input_text: str = Field(..., min_length=1, description="Customer request or operational input text")
+    input_text: str = Field(
+        ..., min_length=1, description="Customer request or operational input text"
+    )
     order_number: Optional[str] = Field(default=None, description="Optional explicit order number")
     customer_id: Optional[str] = Field(default=None, description="Optional customer ID")
     workflow_id: Optional[str] = Field(default=None, description="Optional parent workflow ID")
@@ -240,7 +248,6 @@ class AgentRunRequest(BaseModel):
 class WorkflowResumeRequest(BaseModel):
     approved: bool = Field(..., description="Approval decision: True to execute, False to reject")
     reason: Optional[str] = Field(default=None, description="Operator comment or justification")
-
 
 
 class ToolMetadataResponse(BaseModel):
@@ -295,21 +302,5 @@ class WorkflowRunResponse(BaseModel):
     error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-
-# ==============================================================================
-# Operational Dashboard & Telemetry Schemas (Phase 4 - Deliverable D-16)
-# ==============================================================================
-
-from backend.api.operations_schemas import (
-    ResilienceTelemetry,
-    RiskTelemetry,
-    VerificationTelemetry,
-    PolicyTelemetry,
-    WorkflowStepTelemetry,
-    WorkflowRunDetailResponse,
-    WorkflowRunTelemetry,
-    OperationalSummary,
-)
 
 

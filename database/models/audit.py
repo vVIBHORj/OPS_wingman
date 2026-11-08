@@ -1,16 +1,19 @@
-"""Audit Record database model for OpsWingman Audit and Observability Layer (Phase 4/5 - Deliverable D-16)."""
+"""Audit Record database model for OpsWingman Audit and Observability Layer
+(Phase 4/5 - Deliverable D-16)."""
 
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from sqlalchemy import Boolean, DateTime, Index, Integer, JSON, String, Text, func
+
+from sqlalchemy import JSON, Boolean, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class AuditEventRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Durable record of an operational event, tool interaction, policy decision, or state verification.
+    """Durable record of an operational event, tool interaction, policy decision, or state
+    verification.
 
     Connects workflow runs, actor sources, tools, policies, ML risk evaluations,
     resilience interventions, and post-action verification outcomes into an immutable audit trail.
@@ -50,7 +53,9 @@ class AuditEventRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     idempotency_info: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     success: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata_provenance: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict, nullable=True)
+    metadata_provenance: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, default=dict, nullable=True
+    )
 
     __table_args__ = (
         Index("ix_audit_events_run_id_timestamp", "run_id", "timestamp"),
@@ -58,4 +63,7 @@ class AuditEventRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<AuditEventRecord(id='{self.id}', event_id='{self.event_id}', run_id='{self.run_id}', type='{self.event_type}')>"
+        return (
+            f"<AuditEventRecord(id='{self.id}', event_id='{self.event_id}', "
+            f"run_id='{self.run_id}', type='{self.event_type}')>"
+        )

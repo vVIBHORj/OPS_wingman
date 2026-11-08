@@ -1,28 +1,29 @@
 """
 OpsWingman Phase 1.4 - Domain Event System Verification Script.
-Executes an end-to-end business lifecycle through the API and simulator, demonstrating persistent domain events.
+Executes an end-to-end business lifecycle through the API and simulator,
+demonstrating persistent domain events.
 """
 
+import json
 import os
 import sys
-import json
-from pathlib import Path
 import uuid
 from decimal import Decimal
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 # Ensure root directory is in sys.path
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from database.base import Base
-from database.session import get_db
-from database.models import Customer, Product
-from backend.main import app
+from backend.main import app  # noqa: E402
+from database.base import Base  # noqa: E402
+from database.models import Customer, Product  # noqa: E402
+from database.session import get_db  # noqa: E402
 
 
 def run_events_verification():
@@ -31,6 +32,7 @@ def run_events_verification():
     print("=================================================================")
 
     import tempfile
+
     fd, temp_db_path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     db_url = f"sqlite:///{temp_db_path}"
@@ -91,7 +93,10 @@ def run_events_verification():
         print(f"  [OK] Order Created: {order_data['order_number']} (ID: {order_id})")
 
         # Step 2: Create and Capture Payment
-        print("\n[Step 2] Creating & Capturing Payment -> expecting PAYMENT_INITIATED and PAYMENT_SUCCESSFUL events ...")
+        print(
+            "\n[Step 2] Creating & Capturing Payment -> "
+            "expecting PAYMENT_INITIATED and PAYMENT_SUCCESSFUL events ..."
+        )
         pay_create_res = client.post(
             f"/orders/{order_id}/payments",
             json={"payment_method": "UPI"},
@@ -104,7 +109,9 @@ def run_events_verification():
             json={"gateway_transaction_id": "pay_demo_txn_001"},
         )
         assert pay_cap_res.status_code == 200
-        print(f"  [OK] Payment Captured: {pay_cap_res.json()['payment_reference']} (ID: {payment_id})")
+        print(
+            f"  [OK] Payment Captured: {pay_cap_res.json()['payment_reference']} (ID: {payment_id})"
+        )
 
         # Step 3: Create Shipment
         print("\n[Step 3] Creating Shipment -> expecting SHIPMENT_CREATED event ...")
@@ -115,10 +122,16 @@ def run_events_verification():
         assert ship_res.status_code == 201
         shipment_data = ship_res.json()
         shipment_id = shipment_data["id"]
-        print(f"  [OK] Shipment Created: {shipment_data['shipment_number']} (Tracking: {shipment_data['tracking_number']})")
+        print(
+            f"  [OK] Shipment Created: {shipment_data['shipment_number']} "
+            f"(Tracking: {shipment_data['tracking_number']})"
+        )
 
         # Step 4: Advance & Deliver Shipment
-        print("\n[Step 4] Advancing to IN_TRANSIT and Delivering Shipment -> expecting SHIPMENT_STATUS_CHANGED & SHIPMENT_DELIVERED events ...")
+        print(
+            "\n[Step 4] Advancing to IN_TRANSIT and Delivering Shipment -> "
+            "expecting SHIPMENT_STATUS_CHANGED & SHIPMENT_DELIVERED events ..."
+        )
         transit_res = client.post(
             f"/shipments/{shipment_id}/status",
             json={"status": "IN_TRANSIT", "location": "Hub Central"},

@@ -6,6 +6,7 @@ anomaly detection, and model metadata inspection.
 
 from datetime import datetime
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from backend.ml.features import FeatureExtractor
@@ -18,7 +19,8 @@ from backend.ml.schemas import (
 
 
 class MLRiskService:
-    """Service layer coordinating feature extraction, model scoring, and operational risk assessment."""
+    """Service layer coordinating feature extraction, model scoring,
+    and operational risk assessment."""
 
     def __init__(self, model: Optional[OperationalRiskModel] = None) -> None:
         self.model = model or operational_risk_model
@@ -37,7 +39,8 @@ class MLRiskService:
         order_id: str,
         now: Optional[datetime] = None,
     ) -> RiskAssessmentResult:
-        """Extracts features from database entities and computes full operational risk assessment."""
+        """Extracts features from database entities and computes full operational
+        risk assessment."""
         features = FeatureExtractor.extract_from_db(session=session, order_id=order_id, now=now)
         return self.model.score(features)
 

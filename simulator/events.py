@@ -3,8 +3,9 @@ Domain Event recording and query services for OpsWingman Simulator.
 """
 
 import uuid
-from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Union
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -63,6 +64,7 @@ def list_events(
 ) -> List[DomainEvent]:
     """Queries domain events chronologically with optional filters."""
     from sqlalchemy import func
+
     query = select(DomainEvent)
 
     if entity_type:
@@ -73,7 +75,11 @@ def list_events(
         ev_str = event_type.value if isinstance(event_type, EventType) else str(event_type)
         query = query.where(func.upper(DomainEvent.event_type) == ev_str.upper())
 
-    query = query.order_by(DomainEvent.occurred_at.asc(), DomainEvent.created_at.asc()).limit(limit).offset(offset)
+    query = (
+        query.order_by(DomainEvent.occurred_at.asc(), DomainEvent.created_at.asc())
+        .limit(limit)
+        .offset(offset)
+    )
     return list(session.scalars(query).all())
 
 

@@ -2,6 +2,9 @@
 
 import uuid
 from typing import Any, Dict, List, Optional, Sequence
+
+from database.models.enums import DocumentStatus, DocumentType
+from database.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,8 +16,6 @@ from backend.rag.schemas import (
     RetrievalRequest,
     RetrievalResponse,
 )
-from database.models.enums import DocumentStatus, DocumentType
-from database.models.knowledge import KnowledgeChunk, KnowledgeDocument
 
 
 class RAGService:

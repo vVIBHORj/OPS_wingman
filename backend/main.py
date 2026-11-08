@@ -8,33 +8,34 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 
-from backend.config import get_settings
 from database.session import SessionLocal, dispose_engines
+from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from simulator.exceptions import (
+    BusinessRuleViolationError,
     EntityNotFoundError,
     InvalidStateTransitionError,
-    BusinessRuleViolationError,
     SimulatorError,
 )
+from sqlalchemy import text
+
 from backend.api.routers import (
-    customers_router,
-    products_router,
-    orders_router,
-    payments_router,
-    shipments_router,
-    events_router,
     agent_router,
-    knowledge_router,
     approvals_router,
+    audit_router,
+    customers_router,
+    events_router,
+    knowledge_router,
     ml_router,
     operations_router,
-    audit_router,
+    orders_router,
+    payments_router,
+    products_router,
+    shipments_router,
 )
+from backend.config import get_settings
 
 logger = logging.getLogger("opswingman.api")
 settings = get_settings()
@@ -69,6 +70,7 @@ app = FastAPI(
     redoc_url="/redoc" if settings.docs_enabled else None,
 )
 
+
 # Correlation ID Middleware (X-Request-ID)
 @app.middleware("http")
 async def correlation_id_middleware(request: Request, call_next):
@@ -77,6 +79,7 @@ async def correlation_id_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Request-ID"] = req_id
     return response
+
 
 # CORS configuration
 app.add_middleware(
@@ -91,6 +94,7 @@ app.add_middleware(
 # ==============================================================================
 # Domain Exception Handlers (Mapping Simulator Errors to Standard HTTP Statuses)
 # ==============================================================================
+
 
 @app.exception_handler(EntityNotFoundError)
 async def entity_not_found_handler(request: Request, exc: EntityNotFoundError):
@@ -153,6 +157,7 @@ app.include_router(audit_router)
 # Base Endpoints
 # ==============================================================================
 
+
 @app.get("/", tags=["Root"])
 async def root() -> Dict[str, Any]:
     """Root endpoint providing platform identification and Phase 1 status."""
@@ -197,7 +202,7 @@ async def readiness_probe():
         error_msg = str(exc)
         logger.error("Readiness probe database check failed: %s", exc)
 
-    is_ready = (db_status == "ok")
+    is_ready = db_status == "ok"
     status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
 
     return JSONResponse(

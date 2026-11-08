@@ -6,21 +6,21 @@ and database migration management without heavy external frameworks.
 """
 
 import argparse
+import json
 import os
 import sys
-from pathlib import Path
-import urllib.request
 import urllib.error
-import json
+import urllib.request
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from alembic import command
+from alembic.config import Config
 
 # Ensure repository root is on sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-
-from alembic.config import Config
-from alembic import command
 
 
 def cmd_check_config(args: argparse.Namespace) -> int:
@@ -39,7 +39,12 @@ def cmd_check_config(args: argparse.Namespace) -> int:
         print(f"  Log Level:    {settings.log_level}")
         print(f"  API Bind:     {settings.backend_host}:{settings.backend_port}")
         print(f"  CORS Origins: {settings.backend_cors_origins}")
-        print(f"  DB Sync URL:  {settings.database_sync_url.split('@')[-1] if '@' in settings.database_sync_url else 'configured'}")
+        db_repr = (
+            settings.database_sync_url.split("@")[-1]
+            if "@" in settings.database_sync_url
+            else "configured"
+        )
+        print(f"  DB Sync URL:  {db_repr}")
         print(f"  Docs Enabled: {settings.docs_enabled}")
         return 0
     except Exception as exc:
@@ -71,7 +76,10 @@ def cmd_check_health(args: argparse.Namespace) -> int:
             print(f"[HEALTH] Readiness: OK ({res.status}) -> {data}")
             return 0
     except urllib.error.HTTPError as exc:
-        print(f"[HEALTH] Readiness check returned error status {exc.code}: {exc.read().decode()}", file=sys.stderr)
+        print(
+            f"[HEALTH] Readiness check returned error status {exc.code}: {exc.read().decode()}",
+            file=sys.stderr,
+        )
         return 1
     except Exception as exc:
         print(f"[HEALTH] Readiness check failed: {exc}", file=sys.stderr)
@@ -109,10 +117,12 @@ def cmd_migration_status(args: argparse.Namespace) -> int:
 def check_migration_ready(timeout: int = 60, repo_root: Optional[Path] = None) -> bool:
     """Checks whether the database schema matches Alembic head revision."""
     import time
+
     from alembic.config import Config
-    from alembic.script import ScriptDirectory
     from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
     from sqlalchemy import create_engine
+
     from backend.config import get_settings
 
     root = repo_root or REPO_ROOT
@@ -122,7 +132,9 @@ def check_migration_ready(timeout: int = 60, repo_root: Optional[Path] = None) -
     settings = get_settings()
     sync_url = settings.database_sync_url
 
-    print(f"[MIGRATION-READY] Verifying database schema is at Alembic head (timeout: {timeout}s)...")
+    print(
+        f"[MIGRATION-READY] Verifying database schema is at Alembic head (timeout: {timeout}s)..."
+    )
     alembic_cfg = Config(str(root / "alembic.ini"))
     script = ScriptDirectory.from_config(alembic_cfg)
     expected_heads = set(script.get_heads())
@@ -139,13 +151,19 @@ def check_migration_ready(timeout: int = 60, repo_root: Optional[Path] = None) -
                 print(f"[MIGRATION-READY] OK: Database is at head revision '{current_rev}'.")
                 return True
             else:
-                print(f"[MIGRATION-READY] Current revision is '{current_rev}', expected head in {expected_heads}.")
+                print(
+                    f"[MIGRATION-READY] Current revision is '{current_rev}', "
+                    f"expected head in {expected_heads}."
+                )
         except Exception as exc:
             print(f"[MIGRATION-READY] Database connection check: {exc}")
 
         elapsed = time.time() - start_time
         if elapsed >= timeout:
-            print(f"[MIGRATION-READY] FAIL: Schema readiness check timed out after {timeout}s.", file=sys.stderr)
+            print(
+                f"[MIGRATION-READY] FAIL: Schema readiness check timed out after {timeout}s.",
+                file=sys.stderr,
+            )
             return False
 
         time.sleep(poll_interval)
@@ -172,6 +190,7 @@ def cmd_version(args: argparse.Namespace) -> int:
     git_sha = "unknown"
     try:
         import subprocess
+
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=str(REPO_ROOT),
@@ -192,6 +211,7 @@ def cmd_version(args: argparse.Namespace) -> int:
 def cmd_validate_release(args: argparse.Namespace) -> int:
     """Validates repository artifacts and Kubernetes manifests for release readiness."""
     import yaml
+
     print("[RELEASE] Validating release readiness...")
 
     # 1. Version check
@@ -228,6 +248,7 @@ def cmd_validate_release(args: argparse.Namespace) -> int:
     # 3. Kustomize render check
     try:
         import subprocess
+
         res = subprocess.run(
             ["kubectl", "kustomize", str(k8s_dir)],
             capture_output=True,
@@ -247,9 +268,11 @@ def cmd_validate_release(args: argparse.Namespace) -> int:
 
 def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
     """Runs a complete battery of production preflight checks without requiring real credentials."""
-    import yaml
     import re
     import subprocess
+
+    import yaml
+
     root = repo_root or REPO_ROOT
 
     checks: List[Dict[str, str]] = []
@@ -307,7 +330,11 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
                 manifests_ok = False
 
     if manifests_ok:
-        record("Kubernetes Manifests", "PASS", "All 7 required Kubernetes manifests present and valid YAML")
+        record(
+            "Kubernetes Manifests",
+            "PASS",
+            "All 7 required Kubernetes manifests present and valid YAML",
+        )
 
     # 4. Kustomize render
     try:
@@ -325,45 +352,91 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
         record("Kustomize Render", "WARN", "kubectl not available on PATH; skipping dry-run render")
 
     # 5. Core Kubernetes resources (Namespace, Deployment, Service)
-    if "namespace.yaml" in manifest_data and "deployment.yaml" in manifest_data and "service.yaml" in manifest_data:
+    if (
+        "namespace.yaml" in manifest_data
+        and "deployment.yaml" in manifest_data
+        and "service.yaml" in manifest_data
+    ):
         ns = manifest_data["namespace.yaml"].get("metadata", {}).get("name")
         dep = manifest_data["deployment.yaml"].get("metadata", {}).get("name")
         svc = manifest_data["service.yaml"].get("metadata", {}).get("name")
-        if ns == "opswingman" and dep == "opswingman-backend" and svc == "opswingman-backend-service":
-            record("Core Resources", "PASS", f"Namespace '{ns}', Deployment '{dep}', and Service '{svc}' defined")
+        if (
+            ns == "opswingman"
+            and dep == "opswingman-backend"
+            and svc == "opswingman-backend-service"
+        ):
+            record(
+                "Core Resources",
+                "PASS",
+                f"Namespace '{ns}', Deployment '{dep}', and Service '{svc}' defined",
+            )
         else:
-            record("Core Resources", "FAIL", f"Mismatched resource names: ns={ns}, dep={dep}, svc={svc}")
+            record(
+                "Core Resources",
+                "FAIL",
+                f"Mismatched resource names: ns={ns}, dep={dep}, svc={svc}",
+            )
 
     # 6. Deployment Health Probes
     if "deployment.yaml" in manifest_data:
-        dep_spec = manifest_data["deployment.yaml"].get("spec", {}).get("template", {}).get("spec", {})
+        dep_spec = (
+            manifest_data["deployment.yaml"].get("spec", {}).get("template", {}).get("spec", {})
+        )
         containers = dep_spec.get("containers", [])
         if containers:
             backend = containers[0]
             liveness = backend.get("livenessProbe", {}).get("httpGet", {}).get("path")
             readiness = backend.get("readinessProbe", {}).get("httpGet", {}).get("path")
             if liveness == "/health/live" and readiness == "/health/ready":
-                record("Health Probes", "PASS", "Liveness (/health/live) and readiness (/health/ready) configured")
+                record(
+                    "Health Probes",
+                    "PASS",
+                    "Liveness (/health/live) and readiness (/health/ready) configured",
+                )
             else:
-                record("Health Probes", "FAIL", f"Probes incorrect: liveness={liveness}, readiness={readiness}")
+                record(
+                    "Health Probes",
+                    "FAIL",
+                    f"Probes incorrect: liveness={liveness}, readiness={readiness}",
+                )
         else:
             record("Health Probes", "FAIL", "No containers in deployment spec")
 
     # 7. Deployment Security Context (non-root)
     if "deployment.yaml" in manifest_data:
-        pod_sec = manifest_data["deployment.yaml"].get("spec", {}).get("template", {}).get("spec", {}).get("securityContext", {})
+        pod_sec = (
+            manifest_data["deployment.yaml"]
+            .get("spec", {})
+            .get("template", {})
+            .get("spec", {})
+            .get("securityContext", {})
+        )
         if pod_sec.get("runAsNonRoot") is True and pod_sec.get("runAsUser") == 1000:
-            record("Non-Root Security", "PASS", "Pod securityContext enforces runAsNonRoot=True with UID 1000")
+            record(
+                "Non-Root Security",
+                "PASS",
+                "Pod securityContext enforces runAsNonRoot=True with UID 1000",
+            )
         else:
             record("Non-Root Security", "FAIL", f"Pod securityContext invalid: {pod_sec}")
 
     # 8. Capabilities Drop
     if "deployment.yaml" in manifest_data:
-        containers = manifest_data["deployment.yaml"].get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+        containers = (
+            manifest_data["deployment.yaml"]
+            .get("spec", {})
+            .get("template", {})
+            .get("spec", {})
+            .get("containers", [])
+        )
         if containers:
-            drop_caps = containers[0].get("securityContext", {}).get("capabilities", {}).get("drop", [])
+            drop_caps = (
+                containers[0].get("securityContext", {}).get("capabilities", {}).get("drop", [])
+            )
             if "ALL" in drop_caps:
-                record("Drop Capabilities", "PASS", "Container securityContext drops ALL capabilities")
+                record(
+                    "Drop Capabilities", "PASS", "Container securityContext drops ALL capabilities"
+                )
             else:
                 record("Drop Capabilities", "FAIL", f"Capabilities not dropped: {drop_caps}")
 
@@ -373,13 +446,22 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
         debug_val = cm_data.get("DEBUG")
         env_val = cm_data.get("ENVIRONMENT")
         if debug_val == "false" and env_val == "production":
-            record("Production ConfigMap", "PASS", "ConfigMap specifies DEBUG=false and ENVIRONMENT=production")
+            record(
+                "Production ConfigMap",
+                "PASS",
+                "ConfigMap specifies DEBUG=false and ENVIRONMENT=production",
+            )
         else:
-            record("Production ConfigMap", "FAIL", f"ConfigMap values invalid: DEBUG={debug_val}, ENVIRONMENT={env_val}")
+            record(
+                "Production ConfigMap",
+                "FAIL",
+                f"ConfigMap values invalid: DEBUG={debug_val}, ENVIRONMENT={env_val}",
+            )
 
     # 10 & 11. Production Configuration Validator
     try:
         from backend.config import Settings
+
         # Test rejection of insecure secret
         try:
             Settings(
@@ -387,9 +469,17 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
                 debug=False,
                 app_secret_key="change-this-insecure-secret-key-for-local-dev-only",
             )
-            record("Secret Validation", "FAIL", "Production settings accepted default development secret")
+            record(
+                "Secret Validation",
+                "FAIL",
+                "Production settings accepted default development secret",
+            )
         except ValueError:
-            record("Secret Validation", "PASS", "Production settings strictly reject default/short secret keys")
+            record(
+                "Secret Validation",
+                "PASS",
+                "Production settings strictly reject default/short secret keys",
+            )
 
         # Test rejection of debug=True
         try:
@@ -400,18 +490,33 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
             )
             record("Debug Flag Validation", "FAIL", "Production settings accepted debug=True")
         except ValueError:
-            record("Debug Flag Validation", "PASS", "Production settings strictly reject debug=True")
+            record(
+                "Debug Flag Validation", "PASS", "Production settings strictly reject debug=True"
+            )
     except Exception as exc:
         record("Settings Module", "FAIL", f"Could not load or test Settings: {exc}")
 
     # 12. Required production environment variables represented in schema
     try:
         from backend.config import Settings
+
         fields = Settings.model_fields.keys()
-        expected_fields = {"app_secret_key", "database_url", "database_sync_url", "backend_port", "valkey_url", "environment", "debug"}
+        expected_fields = {
+            "app_secret_key",
+            "database_url",
+            "database_sync_url",
+            "backend_port",
+            "valkey_url",
+            "environment",
+            "debug",
+        }
         missing_fields = expected_fields - set(fields)
         if not missing_fields:
-            record("Config Schema", "PASS", "All required operational environment parameters represented")
+            record(
+                "Config Schema",
+                "PASS",
+                "All required operational environment parameters represented",
+            )
         else:
             record("Config Schema", "FAIL", f"Missing settings schema fields: {missing_fields}")
     except Exception as exc:
@@ -450,7 +555,9 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
                     pass
 
         if not secret_violations:
-            record("Secret Hygiene", "PASS", "No private keys, tokens, or .env files tracked in Git")
+            record(
+                "Secret Hygiene", "PASS", "No private keys, tokens, or .env files tracked in Git"
+            )
         else:
             record("Secret Hygiene", "FAIL", f"Secret leak detected: {secret_violations}")
     except Exception as exc:
@@ -479,9 +586,18 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
     # 17. Application health routes exist in backend
     try:
         from backend.main import app
+
         route_paths = [getattr(r, "path", "") for r in app.routes if getattr(r, "path", None)]
-        if "/health" in route_paths and "/health/live" in route_paths and "/health/ready" in route_paths:
-            record("Health Endpoints", "PASS", "Routes /health, /health/live, /health/ready verified in application")
+        if (
+            "/health" in route_paths
+            and "/health/live" in route_paths
+            and "/health/ready" in route_paths
+        ):
+            record(
+                "Health Endpoints",
+                "PASS",
+                "Routes /health, /health/live, /health/ready verified in application",
+            )
         else:
             record("Health Endpoints", "FAIL", f"Missing health routes in backend: {route_paths}")
     except Exception as exc:
@@ -491,9 +607,17 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
     if "kustomization.yaml" in manifest_data:
         images_block = manifest_data["kustomization.yaml"].get("images", [])
         if images_block and any(img.get("name") == "opswingman/backend" for img in images_block):
-            record("Immutable Image Config", "PASS", "Kustomize 'images' block supports dynamic immutable SHA tagging")
+            record(
+                "Immutable Image Config",
+                "PASS",
+                "Kustomize 'images' block supports dynamic immutable SHA tagging",
+            )
         else:
-            record("Immutable Image Config", "FAIL", "Kustomize missing 'images' block for opswingman/backend")
+            record(
+                "Immutable Image Config",
+                "FAIL",
+                "Kustomize missing 'images' block for opswingman/backend",
+            )
 
     # 19. Staging Overlay Packaging
     staging_overlay_dir = root / "deploy" / "kubernetes" / "overlays" / "staging"
@@ -508,16 +632,42 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
             )
             if res_staging.returncode == 0:
                 rendered_output = res_staging.stdout
-                if "name: opswingman-staging" in rendered_output and "ENVIRONMENT: staging" in rendered_output:
-                    record("Staging Overlay", "PASS", "Staging overlay renders cleanly with namespace opswingman-staging and ENVIRONMENT=staging")
+                if (
+                    "name: opswingman-staging" in rendered_output
+                    and "ENVIRONMENT: staging" in rendered_output
+                ):
+                    record(
+                        "Staging Overlay",
+                        "PASS",
+                        (
+                            "Staging overlay renders cleanly with namespace opswingman-staging "
+                            "and ENVIRONMENT=staging"
+                        ),
+                    )
                 else:
-                    record("Staging Overlay", "FAIL", "Staging overlay rendered without expected namespace or environment")
+                    record(
+                        "Staging Overlay",
+                        "FAIL",
+                        "Staging overlay rendered without expected namespace or environment",
+                    )
             else:
-                record("Staging Overlay", "FAIL", f"Staging kustomize render failed: {res_staging.stderr.strip()}")
+                record(
+                    "Staging Overlay",
+                    "FAIL",
+                    f"Staging kustomize render failed: {res_staging.stderr.strip()}",
+                )
         except FileNotFoundError:
-            record("Staging Overlay", "WARN", "kubectl not available on PATH; skipping staging overlay render check")
+            record(
+                "Staging Overlay",
+                "WARN",
+                "kubectl not available on PATH; skipping staging overlay render check",
+            )
     else:
-        record("Staging Overlay", "FAIL", "deploy/kubernetes/overlays/staging/kustomization.yaml missing")
+        record(
+            "Staging Overlay",
+            "FAIL",
+            "deploy/kubernetes/overlays/staging/kustomization.yaml missing",
+        )
 
     # 20. Migration Concurrency Strategy
     migration_job_path = root / "deploy" / "kubernetes" / "migration-job.yaml"
@@ -527,9 +677,24 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
             auto_migrate = cm_data.get("AUTO_MIGRATE")
             wait_for_migration = cm_data.get("WAIT_FOR_MIGRATION")
             if auto_migrate == "false" and wait_for_migration == "true":
-                record("Migration Strategy", "PASS", "Multi-replica config disables AUTO_MIGRATE and enables WAIT_FOR_MIGRATION with dedicated migration job")
+                record(
+                    "Migration Strategy",
+                    "PASS",
+                    (
+                        "Multi-replica config disables AUTO_MIGRATE and enables "
+                        "WAIT_FOR_MIGRATION with dedicated migration job"
+                    ),
+                )
             else:
-                record("Migration Strategy", "WARN", f"ConfigMap has AUTO_MIGRATE={auto_migrate}, WAIT_FOR_MIGRATION={wait_for_migration}; recommend AUTO_MIGRATE=false in multi-replica deployments")
+                record(
+                    "Migration Strategy",
+                    "WARN",
+                    (
+                        f"ConfigMap has AUTO_MIGRATE={auto_migrate}, "
+                        f"WAIT_FOR_MIGRATION={wait_for_migration}; recommend "
+                        "AUTO_MIGRATE=false in multi-replica deployments"
+                    ),
+                )
         else:
             record("Migration Strategy", "PASS", "deploy/kubernetes/migration-job.yaml present")
     else:
@@ -540,29 +705,53 @@ def run_preflight_checks(repo_root: Optional[Path] = None) -> Dict[str, Any]:
         ing_spec = manifest_data["ingress.yaml"].get("spec", {})
         ing_class = ing_spec.get("ingressClassName")
         if ing_class == "nginx":
-            record("Ingress Configuration", "PASS", "Ingress configures standard spec.ingressClassName='nginx'")
+            record(
+                "Ingress Configuration",
+                "PASS",
+                "Ingress configures standard spec.ingressClassName='nginx'",
+            )
         else:
-            record("Ingress Configuration", "WARN", f"Ingress missing spec.ingressClassName (got: {ing_class})")
+            record(
+                "Ingress Configuration",
+                "WARN",
+                f"Ingress missing spec.ingressClassName (got: {ing_class})",
+            )
 
     # 22, 23, 24. Optional Environment Credentials (WARN if absent, PASS if present)
     app_secret_env = os.getenv("APP_SECRET_KEY")
-    if app_secret_env and len(app_secret_env.strip()) >= 16 and app_secret_env != "change-this-insecure-secret-key-for-local-dev-only":
+    if (
+        app_secret_env
+        and len(app_secret_env.strip()) >= 16
+        and app_secret_env != "change-this-insecure-secret-key-for-local-dev-only"
+    ):
         record("Production Secret Key", "PASS", "APP_SECRET_KEY configured in environment")
     else:
-        record("Production Secret Key", "WARN", "APP_SECRET_KEY not set in local environment (required in production Secret)")
+        record(
+            "Production Secret Key",
+            "WARN",
+            "APP_SECRET_KEY not set in local environment (required in production Secret)",
+        )
 
     kubeconfig_env = os.getenv("KUBECONFIG")
     default_kubeconfig = Path.home() / ".kube" / "config"
     if kubeconfig_env or default_kubeconfig.exists():
         record("Cluster Kubeconfig", "PASS", "Kubeconfig credentials detected")
     else:
-        record("Cluster Kubeconfig", "WARN", "Kubeconfig not configured in local environment (required for CD deployment)")
+        record(
+            "Cluster Kubeconfig",
+            "WARN",
+            "Kubeconfig not configured in local environment (required for CD deployment)",
+        )
 
     registry_pass_env = os.getenv("REGISTRY_PASSWORD")
     if registry_pass_env:
         record("Registry Credentials", "PASS", "REGISTRY_PASSWORD detected in environment")
     else:
-        record("Registry Credentials", "WARN", "REGISTRY_PASSWORD not set in local environment (required for container push)")
+        record(
+            "Registry Credentials",
+            "WARN",
+            "REGISTRY_PASSWORD not set in local environment (required for container push)",
+        )
 
     pass_count = sum(1 for c in checks if c["status"] == "PASS")
     warn_count = sum(1 for c in checks if c["status"] == "WARN")
@@ -585,7 +774,10 @@ def cmd_preflight(args: argparse.Namespace) -> int:
     for c in result["checks"]:
         print(f"[{c['status']}] {c['name']}: {c['message']}")
     print("-" * 70)
-    print(f"Summary: {result['pass_count']} PASS, {result['warn_count']} WARN, {result['fail_count']} FAIL")
+    print(
+        f"Summary: {result['pass_count']} PASS, {result['warn_count']} WARN, "
+        f"{result['fail_count']} FAIL"
+    )
     if result["fail_count"] > 0:
         print("Result: PREFLIGHT FAILED (Resolve FAIL items before deployment)")
         print("=" * 70)
@@ -605,11 +797,19 @@ def main() -> int:
 
     # check-config
     cfg_parser = subparsers.add_parser("check-config", help="Validate environment configuration")
-    cfg_parser.add_argument("--env", choices=["development", "staging", "production"], help="Override environment to test")
+    cfg_parser.add_argument(
+        "--env",
+        choices=["development", "staging", "production"],
+        help="Override environment to test",
+    )
 
     # check-health
-    health_parser = subparsers.add_parser("check-health", help="Check application liveness and readiness")
-    health_parser.add_argument("--url", default="http://localhost:8000", help="Base URL of OpsWingman API")
+    health_parser = subparsers.add_parser(
+        "check-health", help="Check application liveness and readiness"
+    )
+    health_parser.add_argument(
+        "--url", default="http://localhost:8000", help="Base URL of OpsWingman API"
+    )
 
     # migrate
     subparsers.add_parser("migrate", help="Run database migrations (alembic upgrade head)")
@@ -621,11 +821,17 @@ def main() -> int:
     subparsers.add_parser("version", help="Show application version and Git commit hash")
 
     # validate-release
-    subparsers.add_parser("validate-release", help="Validate repository artifacts and manifests for release")
+    subparsers.add_parser(
+        "validate-release", help="Validate repository artifacts and manifests for release"
+    )
 
     # check-migration-ready
-    migrate_ready_parser = subparsers.add_parser("check-migration-ready", help="Verify database schema is at head revision")
-    migrate_ready_parser.add_argument("--timeout", type=int, default=60, help="Seconds to wait before timing out (default: 60)")
+    migrate_ready_parser = subparsers.add_parser(
+        "check-migration-ready", help="Verify database schema is at head revision"
+    )
+    migrate_ready_parser.add_argument(
+        "--timeout", type=int, default=60, help="Seconds to wait before timing out (default: 60)"
+    )
 
     # preflight
     subparsers.add_parser("preflight", help="Run full production preflight validation")

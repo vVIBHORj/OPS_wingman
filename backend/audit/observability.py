@@ -8,6 +8,7 @@ import abc
 import json
 import logging
 from typing import Any, Dict, List, Optional
+
 from database.models.enums import AuditEventType
 
 logger = logging.getLogger("opswingman.audit")
@@ -73,7 +74,8 @@ class PluggableObservabilitySink(BaseObservabilitySink):
         actor: str,
         data: Dict[str, Any],
     ) -> None:
-        # Gracefully handle optional OTel / Langfuse integration without breaking local-first runtime
+        # Gracefully handle optional OTel / Langfuse integration without breaking
+        # local-first runtime
         if self.otel_enabled:
             # Placeholder hook for OpenTelemetry span attribute forwarding
             pass
@@ -106,7 +108,9 @@ class ObservabilityManager:
             try:
                 sink.emit_event(event_id, run_id, event_type, actor, data)
             except Exception as exc:
-                logger.warning("Failed to emit audit event to sink %s: %s", type(sink).__name__, exc)
+                logger.warning(
+                    "Failed to emit audit event to sink %s: %s", type(sink).__name__, exc
+                )
 
 
 # Default singleton instance

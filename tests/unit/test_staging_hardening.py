@@ -2,7 +2,8 @@
 Unit tests for Staging Deployment Hardening (Phase 5 Increment 7).
 
 Verifies:
-- Staging Kustomize overlay renders cleanly with namespace 'opswingman-staging' and ENVIRONMENT='staging'
+- Staging Kustomize overlay renders cleanly with namespace 'opswingman-staging'
+  and ENVIRONMENT='staging'
 - Staging Ingress configuration uses spec.ingressClassName='nginx' and isolated staging hostname
 - Migration Job manifest exists, valid YAML, and enforces secure non-root runtime
 - Migration concurrency resolution: AUTO_MIGRATE=false, WAIT_FOR_MIGRATION=true
@@ -13,9 +14,7 @@ Verifies:
 
 import argparse
 import subprocess
-from pathlib import Path
-from typing import Any, Dict
-import pytest
+
 import yaml
 
 from scripts.ops import (
@@ -33,6 +32,7 @@ K8S_DIR = REPO_ROOT / "deploy" / "kubernetes"
 # 1. Staging Kustomize Overlay Rendering Tests
 # ==============================================================================
 
+
 def test_staging_overlay_renders_cleanly():
     """Verifies that kubectl kustomize deploy/kubernetes/overlays/staging/ renders valid YAML."""
     res = subprocess.run(
@@ -45,7 +45,8 @@ def test_staging_overlay_renders_cleanly():
 
     rendered = res.stdout
     docs = list(yaml.safe_load_all(rendered))
-    # Staging overlay renders 5 resources: Namespace, ConfigMap, Service, Deployment, Ingress (Secret excluded)
+    # Staging overlay renders 5 resources: Namespace, ConfigMap, Service, Deployment,
+    # Ingress (Secret excluded)
     assert len(docs) == 5
 
     # 1. Namespace
@@ -89,6 +90,7 @@ def test_staging_overlay_renders_cleanly():
 # 2. Migration Job Manifest Tests
 # ==============================================================================
 
+
 def test_migration_job_manifest_validity():
     """Verifies that deploy/kubernetes/migration-job.yaml exists and enforces secure execution."""
     job_path = K8S_DIR / "migration-job.yaml"
@@ -117,6 +119,7 @@ def test_migration_job_manifest_validity():
 # 3. Migration Concurrency & Readiness Checks
 # ==============================================================================
 
+
 def test_check_migration_ready_success():
     """Verifies that check_migration_ready() succeeds when database is at head."""
     is_ready = check_migration_ready(timeout=5)
@@ -143,6 +146,7 @@ def test_entrypoint_script_has_wait_for_migration():
 # 4. Staging Deployment Workflow Tests
 # ==============================================================================
 
+
 def test_staging_workflow_file_exists_and_configured():
     """Verifies .github/workflows/deploy-staging.yml exists and targets staging environment."""
     wf_path = REPO_ROOT / ".github" / "workflows" / "deploy-staging.yml"
@@ -162,6 +166,7 @@ def test_staging_workflow_file_exists_and_configured():
 # ==============================================================================
 # 5. Preflight Strategy Verification
 # ==============================================================================
+
 
 def test_preflight_verifies_staging_and_migration_strategy():
     """Verifies that preflight check covers Staging Overlay and Migration Strategy."""
@@ -185,16 +190,21 @@ def test_preflight_verifies_staging_and_migration_strategy():
 # 6. Safety & Consistency Hardening Tests (Phase 5 Increment 7.1)
 # ==============================================================================
 
+
 def test_migration_job_has_no_hardcoded_namespace():
     """Verifies migration-job.yaml does not hardcode namespace, ensuring portability to staging."""
     job_path = K8S_DIR / "migration-job.yaml"
     with open(job_path, "r", encoding="utf-8") as f:
         job = yaml.safe_load(f)
-    assert "namespace" not in job.get("metadata", {}), "migration-job.yaml should not hardcode namespace"
+    assert "namespace" not in job.get("metadata", {}), (
+        "migration-job.yaml should not hardcode namespace"
+    )
 
 
 def test_staging_workflow_image_synchronization():
-    """Verifies that deploy-staging.yml synchronizes target image across build, migration, and deployment."""
+    """Verifies that deploy-staging.yml synchronizes target image across build,
+    migration, and deployment.
+    """
     wf_path = REPO_ROOT / ".github" / "workflows" / "deploy-staging.yml"
     with open(wf_path, "r", encoding="utf-8") as f:
         wf = yaml.safe_load(f)
@@ -229,10 +239,15 @@ def test_staging_workflow_permissions():
 
 
 def test_readme_rollback_documents_database_implications():
-    """Verifies that README.md explicitly documents that rolling back a deployment does not downgrade the database."""
+    """Verifies that README.md explicitly documents that rolling back a deployment
+    does not downgrade the database.
+    """
     readme_path = REPO_ROOT / "README.md"
     content = readme_path.read_text(encoding="utf-8")
-    assert "does not down-migrate the database" in content or "does not downgrade database schema" in content
+    assert (
+        "does not down-migrate the database" in content
+        or "does not downgrade database schema" in content
+    )
 
 
 def test_dockerfile_packaging_includes_scripts():

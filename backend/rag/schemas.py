@@ -1,27 +1,34 @@
-"""Pydantic Schemas for Knowledge Ingestion, Retrieval, and Citations (Phase 3 - Deliverable D-10)."""
+"""Pydantic Schemas for Knowledge Ingestion, Retrieval, and Citations
+(Phase 3 - Deliverable D-10)."""
 
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
 
 from database.models.enums import DocumentStatus, DocumentType
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class KnowledgeCitation(BaseModel):
-    """Standardized citation provenance container attaching ground-truth knowledge snippets to decisions."""
+    """Standardized citation provenance container attaching ground-truth knowledge
+    snippets to decisions."""
+
     document_id: str = Field(..., description="UUID or identifier of source knowledge document")
     title: str = Field(..., description="Document title / policy name")
     document_type: str = Field(default="POLICY", description="POLICY, SOP, FAQ, GUIDELINE")
     version: str = Field(default="1.0.0", description="Document version string, e.g. 1.0.0")
-    chunk_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="UUID of specific chunk")
+    chunk_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()), description="UUID of specific chunk"
+    )
     chunk_index: int = Field(default=0, description="0-indexed sequence of chunk in document")
     source: str = Field(default="", description="Document source identifier")
     snippet: str = Field(default="", description="Exact textual excerpt from the chunk")
     text: str = Field(default="", description="Alias for snippet")
     score: float = Field(default=1.0, description="Relevance similarity score (0.0 to 1.0)")
     similarity_score: float = Field(default=1.0, description="Alias for score")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional contextual metadata")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional contextual metadata"
+    )
 
     def __init__(self, **data: Any) -> None:
         if "text" in data and not data.get("snippet"):
@@ -37,14 +44,23 @@ class KnowledgeCitation(BaseModel):
 
 class DocumentIngestRequest(BaseModel):
     """Request payload to ingest or update a knowledge document."""
-    document_id: Optional[str] = Field(default=None, description="Optional custom document string ID")
+
+    document_id: Optional[str] = Field(
+        default=None, description="Optional custom document string ID"
+    )
     title: str = Field(..., min_length=2, description="Title of knowledge document")
-    document_type: DocumentType = Field(default=DocumentType.POLICY, description="Document type classification")
+    document_type: DocumentType = Field(
+        default=DocumentType.POLICY, description="Document type classification"
+    )
     doc_type: Optional[DocumentType] = Field(default=None, description="Alias for document_type")
-    source: str = Field(..., min_length=2, description="Source identifier, e.g. 'policies/cancellation_v1.md'")
+    source: str = Field(
+        ..., min_length=2, description="Source identifier, e.g. 'policies/cancellation_v1.md'"
+    )
     version: str = Field(default="1.0.0", description="Document semantic version")
     content: str = Field(..., min_length=10, description="Raw text or markdown content")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Arbitrary document metadata")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Arbitrary document metadata"
+    )
 
     def __init__(self, **data: Any) -> None:
         if "doc_type" in data and "document_type" not in data:
@@ -56,6 +72,7 @@ class DocumentIngestRequest(BaseModel):
 
 class KnowledgeChunkResponse(BaseModel):
     """Response model for a knowledge chunk."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -68,6 +85,7 @@ class KnowledgeChunkResponse(BaseModel):
 
 class DocumentResponse(BaseModel):
     """Response model representing an ingested knowledge document."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -97,13 +115,21 @@ class DocumentResponse(BaseModel):
         super().__init__(**data)
 
 
-
 class RetrievalRequest(BaseModel):
     """Request payload to query the RAG knowledge store."""
-    query: str = Field(..., min_length=1, description="Natural language search query or operational keyword")
-    top_k: int = Field(default=3, ge=1, le=20, description="Maximum number of relevant citations to return")
-    document_type: Optional[DocumentType] = Field(default=None, description="Optional filter by document type")
-    doc_types: Optional[List[DocumentType]] = Field(default=None, description="Optional filter by list of document types")
+
+    query: str = Field(
+        ..., min_length=1, description="Natural language search query or operational keyword"
+    )
+    top_k: int = Field(
+        default=3, ge=1, le=20, description="Maximum number of relevant citations to return"
+    )
+    document_type: Optional[DocumentType] = Field(
+        default=None, description="Optional filter by document type"
+    )
+    doc_types: Optional[List[DocumentType]] = Field(
+        default=None, description="Optional filter by list of document types"
+    )
     min_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Minimum relevance threshold")
     min_similarity: Optional[float] = Field(default=None, description="Alias for min_score")
 
@@ -117,6 +143,7 @@ class RetrievalRequest(BaseModel):
 
 class RetrievalResponse(BaseModel):
     """Response container for semantic knowledge retrieval."""
+
     query: str
     citations: List[KnowledgeCitation]
     results: List[KnowledgeCitation] = []

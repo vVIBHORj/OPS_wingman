@@ -3,10 +3,12 @@ Product database model.
 """
 
 from decimal import Decimal
-from typing import List, TYPE_CHECKING, Optional
-from sqlalchemy import String, Text, Numeric, Integer, Boolean, Index
+from typing import TYPE_CHECKING, List, Optional
+
+from sqlalchemy import Boolean, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from database.base import Base, UUIDPrimaryKeyMixin, TimestampMixin
+
+from database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from database.models.order import OrderItem
@@ -17,6 +19,7 @@ class Product(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     Represents an item in the merchant's catalog.
     Ground truth entity for pricing, SKU, and inventory tracking.
     """
+
     __tablename__ = "products"
 
     sku: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
@@ -35,9 +38,10 @@ class Product(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         lazy="selectin",
     )
 
-    __table_args__ = (
-        Index("ix_products_active_category", "is_active", "category"),
-    )
+    __table_args__ = (Index("ix_products_active_category", "is_active", "category"),)
 
     def __repr__(self) -> str:
-        return f"<Product(id={self.id}, sku='{self.sku}', name='{self.name}', price={self.unit_price} {self.currency})>"
+        return (
+            f"<Product(id={self.id}, sku='{self.sku}', name='{self.name}', "
+            f"price={self.unit_price} {self.currency})>"
+        )

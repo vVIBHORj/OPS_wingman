@@ -6,38 +6,35 @@ and all 6 deterministic seed scenarios.
 
 import uuid
 from decimal import Decimal
-from datetime import datetime, timezone, timedelta
+
 import pytest
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
 
 from database.base import Base
 from database.models import (
     Customer,
-    Product,
     Order,
     OrderItem,
-    Payment,
-    Shipment,
-    Ticket,
     OrderStatus,
-    PaymentStatus,
     PaymentMethod,
+    PaymentStatus,
+    Product,
     ShipmentStatus,
-    TicketStatus,
+    Ticket,
     TicketPriority,
-    TicketChannel,
+    TicketStatus,
 )
 from database.seed import (
-    create_seed_data,
-    CUSTOMER_ROHAN_ID,
     CUSTOMER_AMIT_ID,
-    ORDER_DELAYED_ID,
-    ORDER_NORMAL_ID,
+    CUSTOMER_ROHAN_ID,
     ORDER_CANCELLED_ID,
-    ORDER_FAILED_PAYMENT_ID,
+    ORDER_DELAYED_ID,
     ORDER_DELIVERED_ID,
+    ORDER_FAILED_PAYMENT_ID,
+    ORDER_NORMAL_ID,
+    create_seed_data,
 )
 
 
@@ -58,6 +55,7 @@ def test_db():
 # ==============================================================================
 # 1. Model Creation & CRUD Tests
 # ==============================================================================
+
 
 def test_create_customer(test_db: Session):
     """Verify Customer creation with UUID, timestamps, and fields."""
@@ -151,6 +149,7 @@ def test_order_and_items_relationship(test_db: Session):
 # 2. Database Constraints & Uniqueness Tests
 # ==============================================================================
 
+
 def test_unique_customer_email_constraint(test_db: Session):
     """Verify unique constraint on customer email."""
     c1 = Customer(email="duplicate@example.com", first_name="A", last_name="B")
@@ -198,6 +197,7 @@ def test_unique_order_number_constraint(test_db: Session):
 # 3. Deterministic Seed Data & Scenarios Tests
 # ==============================================================================
 
+
 def test_seed_data_generation_and_counts(test_db: Session):
     """Verify that seed generation populates all models with expected counts."""
     c_count, p_count, o_count, oi_count, pay_count, s_count = create_seed_data(test_db)
@@ -241,7 +241,6 @@ def test_scenario_2_delayed_order_and_support_ticket(test_db: Session):
     assert "transit network disruption" in shipment.delay_reason
     assert shipment.current_location is not None
     assert "Hubli" in shipment.current_location
-
 
     # Verify linked support ticket
     assert len(order.tickets) == 1

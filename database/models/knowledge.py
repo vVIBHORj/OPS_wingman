@@ -1,11 +1,14 @@
-"""Knowledge Document and Chunk database models for OpsWingman RAG System (Phase 3 - Deliverable D-10)."""
+"""Knowledge Document and Chunk database models for OpsWingman RAG System
+(Phase 3 - Deliverable D-10)."""
 
 import uuid
 from typing import Any, Dict, List, Optional
-from sqlalchemy import Enum as SQLEnum, ForeignKey, Index, Integer, JSON, String, Text
+
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database.base import Base, GUID, TimestampMixin, UUIDPrimaryKeyMixin
+from database.base import GUID, Base, TimestampMixin, UUIDPrimaryKeyMixin
 from database.models.enums import DocumentStatus, DocumentType
 
 
@@ -43,9 +46,7 @@ class KnowledgeDocument(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         order_by="KnowledgeChunk.chunk_index",
     )
 
-    __table_args__ = (
-        Index("ix_knowledge_documents_source_version", "source", "version"),
-    )
+    __table_args__ = (Index("ix_knowledge_documents_source_version", "source", "version"),)
 
     @property
     def document_id(self) -> str:
@@ -63,7 +64,10 @@ class KnowledgeDocument(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         return self.document_type
 
     def __repr__(self) -> str:
-        return f"<KnowledgeDocument(id={self.id}, title='{self.title}', type='{self.document_type.value}', v='{self.version}')>"
+        return (
+            f"<KnowledgeDocument(id={self.id}, title='{self.title}', "
+            f"type='{self.document_type.value}', v='{self.version}')>"
+        )
 
 
 class KnowledgeChunk(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -84,11 +88,11 @@ class KnowledgeChunk(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     chunk_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     # Relationships
-    document: Mapped["KnowledgeDocument"] = relationship("KnowledgeDocument", back_populates="chunks")
-
-    __table_args__ = (
-        Index("ix_knowledge_chunks_doc_idx", "document_id", "chunk_index"),
+    document: Mapped["KnowledgeDocument"] = relationship(
+        "KnowledgeDocument", back_populates="chunks"
     )
+
+    __table_args__ = (Index("ix_knowledge_chunks_doc_idx", "document_id", "chunk_index"),)
 
     def __repr__(self) -> str:
         return f"<KnowledgeChunk(id={self.id}, doc_id={self.document_id}, idx={self.chunk_index})>"

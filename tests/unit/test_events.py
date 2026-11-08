@@ -1,35 +1,34 @@
 """
 Unit and Integration Tests for Domain Events (Phase 1.4).
-Verifies deterministic event capture, transactional integrity, payload richness, and read-only API query endpoints.
+Verifies deterministic event capture, transactional integrity, payload richness,
+and read-only API query endpoints.
 """
 
-import uuid
 import os
 import tempfile
+import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from datetime import datetime, timezone, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
+import database.models  # noqa: F401
+import simulator
+from backend.main import app
 from database.base import Base
-from database.session import get_db
 from database.models import (
     Customer,
-    Product,
-    Order,
-    Payment,
-    Shipment,
-    DomainEvent,
     EventType,
     OrderStatus,
-    PaymentStatus,
     PaymentMethod,
+    PaymentStatus,
+    Product,
     ShipmentStatus,
 )
-from backend.main import app
-import simulator
+from database.session import get_db
 
 
 @pytest.fixture(scope="function")
@@ -129,6 +128,7 @@ def api_client():
 # Simulator Domain Event Unit Tests
 # ==============================================================================
 
+
 def test_event_created_on_order_created(test_db: Session):
     customer_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
     product_id = uuid.UUID("22222222-2222-4222-8222-222222222222")
@@ -220,7 +220,9 @@ def test_event_created_on_payment_lifecycle(test_db: Session):
         order_id=order.id,
         payment_method=PaymentMethod.UPI,
     )
-    p_events = simulator.list_events_for_entity(test_db, entity_type="payment", entity_id=payment.id)
+    p_events = simulator.list_events_for_entity(
+        test_db, entity_type="payment", entity_id=payment.id
+    )
     assert len(p_events) == 1
     assert p_events[0].event_type == EventType.PAYMENT_INITIATED.value
     assert p_events[0].payload["status"] == PaymentStatus.INITIATED.value
@@ -232,7 +234,9 @@ def test_event_created_on_payment_lifecycle(test_db: Session):
         payment_id=payment.id,
         gateway_transaction_id="pay_upi_success_12345",
     )
-    p_events = simulator.list_events_for_entity(test_db, entity_type="payment", entity_id=payment.id)
+    p_events = simulator.list_events_for_entity(
+        test_db, entity_type="payment", entity_id=payment.id
+    )
     assert len(p_events) == 2
     assert p_events[1].event_type == EventType.PAYMENT_SUCCESSFUL.value
     assert p_events[1].payload["previous_status"] == PaymentStatus.INITIATED.value
@@ -263,7 +267,9 @@ def test_event_created_on_payment_failed(test_db: Session):
         error_message="Insufficient balance in card",
     )
 
-    p_events = simulator.list_events_for_entity(test_db, entity_type="payment", entity_id=payment.id)
+    p_events = simulator.list_events_for_entity(
+        test_db, entity_type="payment", entity_id=payment.id
+    )
     assert len(p_events) == 2
     fail_event = p_events[1]
     assert fail_event.event_type == EventType.PAYMENT_FAILED.value
@@ -291,7 +297,9 @@ def test_event_created_on_shipment_lifecycle(test_db: Session):
         order_id=order.id,
         carrier="BlueDart",
     )
-    s_events = simulator.list_events_for_entity(test_db, entity_type="shipment", entity_id=shipment.id)
+    s_events = simulator.list_events_for_entity(
+        test_db, entity_type="shipment", entity_id=shipment.id
+    )
     assert len(s_events) == 1
     assert s_events[0].event_type == EventType.SHIPMENT_CREATED.value
     assert s_events[0].payload["carrier"] == "BlueDart"
@@ -303,7 +311,9 @@ def test_event_created_on_shipment_lifecycle(test_db: Session):
         new_status=ShipmentStatus.IN_TRANSIT,
         location="Bengaluru Hub",
     )
-    s_events = simulator.list_events_for_entity(test_db, entity_type="shipment", entity_id=shipment.id)
+    s_events = simulator.list_events_for_entity(
+        test_db, entity_type="shipment", entity_id=shipment.id
+    )
     assert len(s_events) == 2
     assert s_events[1].event_type == EventType.SHIPMENT_STATUS_CHANGED.value
     assert s_events[1].payload["previous_status"] == ShipmentStatus.MANIFESTED.value
@@ -318,7 +328,9 @@ def test_event_created_on_shipment_lifecycle(test_db: Session):
         updated_eta=revised_eta,
         current_location="Hosur Transit Point",
     )
-    s_events = simulator.list_events_for_entity(test_db, entity_type="shipment", entity_id=shipment.id)
+    s_events = simulator.list_events_for_entity(
+        test_db, entity_type="shipment", entity_id=shipment.id
+    )
     assert len(s_events) == 3
     delay_event = s_events[2]
     assert delay_event.event_type == EventType.SHIPMENT_DELAYED.value
@@ -340,7 +352,9 @@ def test_event_created_on_shipment_lifecycle(test_db: Session):
         actual_delivery_date=deliv_time,
         recipient_notes="Signed by Security Guard",
     )
-    s_events = simulator.list_events_for_entity(test_db, entity_type="shipment", entity_id=shipment.id)
+    s_events = simulator.list_events_for_entity(
+        test_db, entity_type="shipment", entity_id=shipment.id
+    )
     assert len(s_events) == 5
     deliv_event = s_events[4]
     assert deliv_event.event_type == EventType.SHIPMENT_DELIVERED.value
@@ -382,12 +396,18 @@ def test_multiple_events_maintain_chronological_ordering(test_db: Session):
         customer_id=customer_id,
         items=[{"product_id": product_id, "quantity": 1}],
     )
-    simulator.update_order_status(session=test_db, order_id=order.id, new_status=OrderStatus.CONFIRMED)
-    simulator.update_order_status(session=test_db, order_id=order.id, new_status=OrderStatus.PROCESSING)
+    simulator.update_order_status(
+        session=test_db, order_id=order.id, new_status=OrderStatus.CONFIRMED
+    )
+    simulator.update_order_status(
+        session=test_db, order_id=order.id, new_status=OrderStatus.PROCESSING
+    )
     payment = simulator.create_payment(session=test_db, order_id=order.id)
     simulator.capture_payment(session=test_db, payment_id=payment.id)
     shipment = simulator.create_shipment(session=test_db, order_id=order.id)
-    simulator.update_shipment_status(session=test_db, shipment_id=shipment.id, new_status=ShipmentStatus.IN_TRANSIT)
+    simulator.update_shipment_status(
+        session=test_db, shipment_id=shipment.id, new_status=ShipmentStatus.IN_TRANSIT
+    )
     simulator.deliver_shipment(session=test_db, shipment_id=shipment.id)
 
     all_events = simulator.list_events(test_db)
@@ -401,6 +421,7 @@ def test_multiple_events_maintain_chronological_ordering(test_db: Session):
 # ==============================================================================
 # Domain Event REST API Tests
 # ==============================================================================
+
 
 def test_api_get_event_by_id_and_filters(api_client: TestClient):
     # 1. Create an order via API

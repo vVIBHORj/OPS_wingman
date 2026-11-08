@@ -1,1 +1,1 @@
-﻿# Package marker for tests/security
+# Package marker for tests/security

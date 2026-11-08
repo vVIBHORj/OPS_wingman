@@ -6,44 +6,50 @@ API requests, and agent tool actions using durable database unique constraints.
 
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+from database.models.enums import IdempotencyStatus
+from database.models.idempotency import IdempotencyRecord
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from database.models.enums import IdempotencyStatus
-from database.models.idempotency import IdempotencyRecord
 from backend.resilience.schemas import (
     IdempotencyAcquisitionResult,
     IdempotencyRecordResponse,
 )
 
-
 # ==============================================================================
 # Domain Exceptions
 # ==============================================================================
 
+
 class IdempotencyError(Exception):
     """Base exception for all idempotency service errors."""
+
     pass
 
 
 class IdempotencyRecordNotFoundError(IdempotencyError):
     """Raised when an idempotency record expected to exist is missing."""
+
     pass
 
 
 class IdempotencyRequestHashMismatchError(IdempotencyError):
     """Raised when an existing idempotency key is reused with a different request payload/hash."""
+
     pass
 
 
 class IdempotencyInvalidStateTransitionError(IdempotencyError):
     """Raised when attempting an invalid status transition on an idempotency record."""
+
     pass
 
 
 def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    """Helper ensuring datetimes are timezone-aware UTC for safe comparisons across SQLite and Postgres."""
+    """Helper ensuring datetimes are timezone-aware UTC for safe comparisons
+    across SQLite and Postgres."""
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -54,6 +60,7 @@ def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
 # ==============================================================================
 # Service Implementation
 # ==============================================================================
+
 
 class IdempotencyService:
     """Provides atomic acquisition, caching, and state transitions for idempotent operations."""
@@ -120,9 +127,14 @@ class IdempotencyService:
                 )
 
             # Validate request_hash consistency
-            if request_hash is not None and existing.request_hash is not None and existing.request_hash != request_hash:
+            if (
+                request_hash is not None
+                and existing.request_hash is not None
+                and existing.request_hash != request_hash
+            ):
                 raise IdempotencyRequestHashMismatchError(
-                    f"Idempotency key '{idempotency_key}' in scope '{scope}' was previously registered with a different request hash."
+                    f"Idempotency key '{idempotency_key}' in scope '{scope}' was previously "
+                    "registered with a different request hash."
                 )
 
             is_completed = existing.status == IdempotencyStatus.COMPLETED
@@ -183,12 +195,18 @@ class IdempotencyService:
             )
             if winner is None:
                 raise IdempotencyError(
-                    f"IntegrityError encountered but record not found for scope '{scope}', key '{idempotency_key}'."
+                    f"IntegrityError encountered but record not found for scope '{scope}', "
+                    f"key '{idempotency_key}'."
                 )
 
-            if request_hash is not None and winner.request_hash is not None and winner.request_hash != request_hash:
+            if (
+                request_hash is not None
+                and winner.request_hash is not None
+                and winner.request_hash != request_hash
+            ):
                 raise IdempotencyRequestHashMismatchError(
-                    f"Idempotency key '{idempotency_key}' in scope '{scope}' was registered concurrently with a different request hash."
+                    f"Idempotency key '{idempotency_key}' in scope '{scope}' was registered "
+                    "concurrently with a different request hash."
                 )
 
             is_completed = winner.status == IdempotencyStatus.COMPLETED
@@ -265,7 +283,8 @@ class IdempotencyService:
 
         if record.status != IdempotencyStatus.PROCESSING:
             raise IdempotencyInvalidStateTransitionError(
-                f"Cannot complete idempotency record in status '{record.status}'. Must be '{IdempotencyStatus.PROCESSING}'."
+                f"Cannot complete idempotency record in status '{record.status}'. "
+                f"Must be '{IdempotencyStatus.PROCESSING}'."
             )
 
         record.status = IdempotencyStatus.COMPLETED
@@ -283,7 +302,8 @@ class IdempotencyService:
         scope: str,
         response_payload: Any = None,
     ) -> IdempotencyRecord:
-        """Transitions an in-flight PROCESSING record to FAILED and optionally records error details."""
+        """Transitions an in-flight PROCESSING record to FAILED and optionally records
+        error details."""
         record = self.get_record(session, idempotency_key=idempotency_key, scope=scope)
         if record is None:
             raise IdempotencyRecordNotFoundError(

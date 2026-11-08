@@ -7,19 +7,19 @@ import os
 import tempfile
 import uuid
 from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
-from database.base import Base
-from database.session import get_db
-from database.models import Customer, Product, OrderStatus, ShipmentStatus
-from backend.main import app
-from backend.agents.ops_agent import OpsAgent
-from backend.workflows.state import WorkflowState
-from backend.workflows.checkpoint import checkpoint_store
 import simulator
+from backend.agents.ops_agent import OpsAgent
+from backend.main import app
+from backend.workflows.state import WorkflowState
+from database.base import Base
+from database.models import Customer, OrderStatus, Product, ShipmentStatus
+from database.session import get_db
 
 
 @pytest.fixture(scope="function")
@@ -117,6 +117,7 @@ def api_client():
 # Ops Agent LangGraph Execution Tests
 # ==============================================================================
 
+
 def test_agent_low_risk_order_status_workflow(test_db: Session):
     customer_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
     product_id = uuid.UUID("22222222-2222-4222-8222-222222222222")
@@ -160,7 +161,12 @@ def test_agent_low_risk_shipment_tracking_workflow(test_db: Session):
     payment = simulator.create_payment(session=test_db, order_id=order.id)
     simulator.capture_payment(session=test_db, payment_id=payment.id)
     shipment = simulator.create_shipment(session=test_db, order_id=order.id, carrier="Delhivery")
-    simulator.update_shipment_status(session=test_db, shipment_id=shipment.id, new_status=ShipmentStatus.IN_TRANSIT, location="Pune Hub")
+    simulator.update_shipment_status(
+        session=test_db,
+        shipment_id=shipment.id,
+        new_status=ShipmentStatus.IN_TRANSIT,
+        location="Pune Hub",
+    )
 
     agent = OpsAgent()
     run_record = agent.run(
@@ -174,7 +180,6 @@ def test_agent_low_risk_shipment_tracking_workflow(test_db: Session):
     assert "Delhivery" in run_record.final_response
     assert "Pune Hub" in run_record.final_response
     assert shipment.tracking_number in run_record.final_response
-
 
 
 def test_agent_high_risk_cancellation_workflow_pauses_for_approval(test_db: Session):
@@ -193,7 +198,8 @@ def test_agent_high_risk_cancellation_workflow_pauses_for_approval(test_db: Sess
         db=test_db,
     )
 
-    # Must transition to WAITING_FOR_APPROVAL and not silently execute cancellation without oversight
+    # Must transition to WAITING_FOR_APPROVAL and not silently execute cancellation
+    # without oversight
     assert run_record.state == WorkflowState.WAITING_FOR_APPROVAL
     assert run_record.intent == "cancel_order_request"
     assert len(run_record.proposed_actions) >= 1
@@ -304,6 +310,7 @@ def test_durable_checkpoint_store_persistence(tmp_path):
 # Agent REST API Tests
 # ==============================================================================
 
+
 def test_api_agent_run_and_query_endpoints(api_client: TestClient):
     # 1. Create an order via API
     order_res = api_client.post(
@@ -385,4 +392,3 @@ def test_api_agent_approval_and_resume_endpoint(api_client: TestClient):
     order_check = api_client.get(f"/orders/{order_id}")
     assert order_check.status_code == 200
     assert order_check.json()["status"] == "CANCELLED"
-

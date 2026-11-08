@@ -8,7 +8,7 @@ from backend.rag.embeddings import DeterministicLocalEmbeddingProvider
 from backend.rag.schemas import DocumentIngestRequest, RetrievalRequest
 from backend.rag.seed_knowledge import seed_default_knowledge
 from backend.rag.service import RAGService
-from database.models.enums import DocumentStatus, DocumentType
+from database.models.enums import DocumentType
 
 
 def test_chunking_deterministic():

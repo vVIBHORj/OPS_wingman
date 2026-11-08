@@ -5,41 +5,38 @@ Tests deterministic operations, state validation, and transition enforcement.
 
 import uuid
 from decimal import Decimal
-from datetime import datetime, timezone, timedelta
+
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
+import database.models  # noqa: F401
 from database.base import Base
 from database.models import (
     Customer,
-    Product,
-    Order,
-    Payment,
-    Shipment,
     OrderStatus,
-    PaymentStatus,
     PaymentMethod,
+    PaymentStatus,
+    Product,
     ShipmentStatus,
 )
 from simulator import (
-    BusinessSimulator,
-    create_order,
-    get_order,
-    update_order_status,
-    cancel_order,
-    create_payment,
-    get_payment,
-    capture_payment,
-    fail_payment,
-    create_shipment,
-    get_shipment,
-    update_shipment_status,
-    delay_shipment,
-    deliver_shipment,
-    InvalidStateTransitionError,
-    EntityNotFoundError,
     BusinessRuleViolationError,
+    BusinessSimulator,
+    EntityNotFoundError,
+    InvalidStateTransitionError,
+    cancel_order,
+    capture_payment,
+    create_order,
+    create_payment,
+    create_shipment,
+    deliver_shipment,
+    fail_payment,
+    get_order,
+    get_payment,
+    get_shipment,
+    update_order_status,
+    update_shipment_status,
 )
 
 
@@ -93,12 +90,13 @@ def test_db():
 # 1. Normal Order Lifecycle Tests
 # ==============================================================================
 
+
 def test_order_creation_and_calculation(test_db: Session):
     """Verify order creation and deterministic monetary calculations."""
     cust_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
     items = [
-        {"sku": "SKU-SIM-01", "quantity": 2},            # 2000.00
-        {"sku": "SKU-SIM-02", "quantity": 1},            # 2500.00
+        {"sku": "SKU-SIM-01", "quantity": 2},  # 2000.00
+        {"sku": "SKU-SIM-02", "quantity": 1},  # 2500.00
     ]
     order = create_order(
         session=test_db,
@@ -136,6 +134,7 @@ def test_full_normal_order_lifecycle(test_db: Session):
 # ==============================================================================
 # 2. Payment Operations & Failures
 # ==============================================================================
+
 
 def test_successful_payment_capture(test_db: Session):
     """Verify creating and capturing a payment advances order to CONFIRMED."""
@@ -184,6 +183,7 @@ def test_failed_payment_operation(test_db: Session):
 # 3. Shipment Delay & Delivery Operations
 # ==============================================================================
 
+
 def test_shipment_delay_scenario(test_db: Session):
     """Verify delaying a shipment records reason, revised ETA, and location."""
     sim = BusinessSimulator(session=test_db)
@@ -204,7 +204,6 @@ def test_shipment_delay_scenario(test_db: Session):
     assert order.status == OrderStatus.SHIPPED
 
 
-
 def test_shipment_delivery_advances_order(test_db: Session):
     """Verify delivering shipment advances order to DELIVERED."""
     cust_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
@@ -217,9 +216,13 @@ def test_shipment_delivery_advances_order(test_db: Session):
 
     # Advance through transit
     update_shipment_status(test_db, shipment_id=shipment.id, new_status=ShipmentStatus.IN_TRANSIT)
-    update_shipment_status(test_db, shipment_id=shipment.id, new_status=ShipmentStatus.OUT_FOR_DELIVERY)
+    update_shipment_status(
+        test_db, shipment_id=shipment.id, new_status=ShipmentStatus.OUT_FOR_DELIVERY
+    )
 
-    delivered = deliver_shipment(test_db, shipment_id=shipment.id, recipient_notes="Signed by Sim User")
+    delivered = deliver_shipment(
+        test_db, shipment_id=shipment.id, recipient_notes="Signed by Sim User"
+    )
     assert delivered.status == ShipmentStatus.DELIVERED
     assert delivered.actual_delivery_date is not None
 
@@ -231,12 +234,15 @@ def test_shipment_delivery_advances_order(test_db: Session):
 # 4. Cancellation & Invalid State Transitions
 # ==============================================================================
 
+
 def test_cancel_active_order(test_db: Session):
     """Verify order cancellation records reason and prevents shipment."""
     cust_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
     order = create_order(test_db, customer_id=cust_id, items=[{"sku": "SKU-SIM-01", "quantity": 1}])
 
-    cancelled = cancel_order(test_db, order_id=order.id, reason="Customer found item cheaper elsewhere.")
+    cancelled = cancel_order(
+        test_db, order_id=order.id, reason="Customer found item cheaper elsewhere."
+    )
     assert cancelled.status == OrderStatus.CANCELLED
     assert cancelled.cancellation_reason == "Customer found item cheaper elsewhere."
 
@@ -280,7 +286,9 @@ def test_invalid_shipment_state_transitions(test_db: Session):
 
     # Cannot jump MANIFESTED directly to DELIVERED without delivery call or transition
     with pytest.raises(InvalidStateTransitionError):
-        update_shipment_status(test_db, shipment_id=shipment.id, new_status=ShipmentStatus.DELIVERED)
+        update_shipment_status(
+            test_db, shipment_id=shipment.id, new_status=ShipmentStatus.DELIVERED
+        )
 
     # Advance to IN_TRANSIT, then deliver shipment
     update_shipment_status(test_db, shipment_id=shipment.id, new_status=ShipmentStatus.IN_TRANSIT)
@@ -288,7 +296,9 @@ def test_invalid_shipment_state_transitions(test_db: Session):
 
     # DELIVERED is terminal: cannot return to IN_TRANSIT or MANIFESTED
     with pytest.raises(InvalidStateTransitionError):
-        update_shipment_status(test_db, shipment_id=shipment.id, new_status=ShipmentStatus.IN_TRANSIT)
+        update_shipment_status(
+            test_db, shipment_id=shipment.id, new_status=ShipmentStatus.IN_TRANSIT
+        )
 
 
 def test_entity_not_found_handling(test_db: Session):

@@ -25,7 +25,8 @@ class PolicyEngine:
         facts: Dict[str, Any],
         citations: Optional[List[KnowledgeCitation]] = None,
     ) -> PolicyEvaluationResult:
-        """Evaluates a proposed action against governing operational policies using verified facts."""
+        """Evaluates a proposed action against governing operational policies using verified
+        facts."""
         cits = citations or []
 
         # Extract action name from string or StructuredAction
@@ -64,13 +65,17 @@ class PolicyEngine:
                 allowed=False,
                 requires_approval=False,
                 decision=(
-                    f"Dispatched orders cannot be cancelled directly under POL-CAN-001 (Status: '{order_status}'). "
+                    f"Dispatched orders cannot be cancelled directly under POL-CAN-001 "
+                    f"(Status: '{order_status}'). "
                     f"A return request may be initiated after delivery."
                 ),
                 policy_id="POL-CAN-001",
                 policy_version="1.0.0",
                 matched_rules=["CAN-R02", "POL-CAN-001.R2: Disallowed post-dispatch cancellation"],
-                relevant_facts={"order_status": order_status, "order_total_amount": str(total_amount)},
+                relevant_facts={
+                    "order_status": order_status,
+                    "order_total_amount": str(total_amount),
+                },
                 citations=citations,
             )
 
@@ -100,13 +105,16 @@ class PolicyEngine:
 
             if total_amount > self.HIGH_VALUE_ORDER_THRESHOLD:
                 decision_msg = (
-                    f"High-value order cancellation (INR {total_amount:.2f} > INR {self.HIGH_VALUE_ORDER_THRESHOLD:.2f}) "
+                    f"High-value order cancellation (INR {total_amount:.2f} > "
+                    f"INR {self.HIGH_VALUE_ORDER_THRESHOLD:.2f}) "
                     f"requires human supervisor approval under POL-CAN-001."
                 )
-                matched.extend([
-                    "CAN-R03",
-                    "POL-CAN-001.R3: High-value cancellation approval threshold",
-                ])
+                matched.extend(
+                    [
+                        "CAN-R03",
+                        "POL-CAN-001.R3: High-value cancellation approval threshold",
+                    ]
+                )
             else:
                 decision_msg = (
                     f"Order cancellation is eligible under POL-CAN-001 (Status: {order_status}). "
@@ -114,8 +122,13 @@ class PolicyEngine:
                 )
 
             if ml_anomaly or ml_risk_band == "HIGH" or ml_risk_score >= 0.70:
-                anomaly_desc = f" (Reasons: {', '.join(ml_anomaly_reasons)})" if ml_anomaly_reasons else ""
-                decision_msg += f" Elevated ML Risk flagged [Score: {ml_risk_score:.2f}, Band: {ml_risk_band or 'HIGH'}]{anomaly_desc}."
+                anomaly_desc = (
+                    f" (Reasons: {', '.join(ml_anomaly_reasons)})" if ml_anomaly_reasons else ""
+                )
+                decision_msg += (
+                    f" Elevated ML Risk flagged [Score: {ml_risk_score:.2f}, "
+                    f"Band: {ml_risk_band or 'HIGH'}]{anomaly_desc}."
+                )
                 matched.append("POL-CAN-001.R5: ML Anomaly / High Risk detected")
 
             relevant_facts: Dict[str, Any] = {
@@ -123,11 +136,13 @@ class PolicyEngine:
                 "order_total_amount": str(total_amount),
             }
             if ml_anomaly or ml_risk_band:
-                relevant_facts.update({
-                    "ml_risk_score": ml_risk_score,
-                    "ml_risk_band": ml_risk_band,
-                    "ml_anomaly_detected": ml_anomaly,
-                })
+                relevant_facts.update(
+                    {
+                        "ml_risk_score": ml_risk_score,
+                        "ml_risk_band": ml_risk_band,
+                        "ml_anomaly_detected": ml_anomaly,
+                    }
+                )
 
             return PolicyEvaluationResult(
                 allowed=True,
@@ -158,7 +173,12 @@ class PolicyEngine:
     ) -> PolicyEvaluationResult:
         """Governed by POL-REF-001 (Refund & Payment Policy v1.0.0)."""
         payment_status = str(facts.get("payment_status", "UNKNOWN")).upper()
-        refund_amount_val = facts.get("refund_amount") or facts.get("payment_amount") or facts.get("amount") or "0.00"
+        refund_amount_val = (
+            facts.get("refund_amount")
+            or facts.get("payment_amount")
+            or facts.get("amount")
+            or "0.00"
+        )
         try:
             refund_amount = Decimal(str(refund_amount_val))
         except Exception:
@@ -170,13 +190,17 @@ class PolicyEngine:
                 allowed=False,
                 requires_approval=False,
                 decision=(
-                    f"Refund rejected: Original payment was not successful (Status: '{payment_status}'). "
+                    f"Refund rejected: Original payment was not successful "
+                    f"(Status: '{payment_status}'). "
                     f"Refunds strictly require a confirmed captured transaction."
                 ),
                 policy_id="POL-REF-001",
                 policy_version="1.0.0",
                 matched_rules=["REF-R01", "POL-REF-001.R1: Valid captured payment prerequisite"],
-                relevant_facts={"payment_status": payment_status, "refund_amount": str(refund_amount)},
+                relevant_facts={
+                    "payment_status": payment_status,
+                    "refund_amount": str(refund_amount),
+                },
                 citations=citations,
             )
 
@@ -187,12 +211,15 @@ class PolicyEngine:
 
         # 2. Check ML anomaly / high risk first
         if ml_anomaly or ml_risk_band == "HIGH" or ml_risk_score >= 0.70:
-            anomaly_detail = f" (Reasons: {', '.join(ml_anomaly_reasons)})" if ml_anomaly_reasons else ""
+            anomaly_detail = (
+                f" (Reasons: {', '.join(ml_anomaly_reasons)})" if ml_anomaly_reasons else ""
+            )
             return PolicyEvaluationResult(
                 allowed=True,
                 requires_approval=True,
                 decision=(
-                    f"Refund of INR {refund_amount:.2f} requires human supervisor approval due to elevated ML Risk "
+                    f"Refund of INR {refund_amount:.2f} requires human supervisor approval "
+                    f"due to elevated ML Risk "
                     f"[Score: {ml_risk_score:.2f}, Band: {ml_risk_band or 'HIGH'}]{anomaly_detail}."
                 ),
                 policy_id="POL-REF-001",
@@ -214,13 +241,20 @@ class PolicyEngine:
                 allowed=True,
                 requires_approval=True,
                 decision=(
-                    f"High-value refund of INR {refund_amount:.2f} exceeds auto-approval limit (INR {self.AUTO_REFUND_THRESHOLD:.2f}). "
+                    f"High-value refund of INR {refund_amount:.2f} exceeds auto-approval limit "
+                    f"(INR {self.AUTO_REFUND_THRESHOLD:.2f}). "
                     f"Human supervisor approval is required under POL-REF-001 before processing."
                 ),
                 policy_id="POL-REF-001",
                 policy_version="1.0.0",
-                matched_rules=["REF-R03", "POL-REF-001.R2: High-value refund supervisor approval gate"],
-                relevant_facts={"payment_status": payment_status, "refund_amount": str(refund_amount)},
+                matched_rules=[
+                    "REF-R03",
+                    "POL-REF-001.R2: High-value refund supervisor approval gate",
+                ],
+                relevant_facts={
+                    "payment_status": payment_status,
+                    "refund_amount": str(refund_amount),
+                },
                 citations=citations,
             )
         else:
@@ -228,13 +262,17 @@ class PolicyEngine:
                 allowed=True,
                 requires_approval=False,
                 decision=(
-                    f"Low-value refund of INR {refund_amount:.2f} is within auto-approval threshold (<= INR {self.AUTO_REFUND_THRESHOLD:.2f}) "
+                    f"Low-value refund of INR {refund_amount:.2f} is within "
+                    f"auto-approval threshold (<= INR {self.AUTO_REFUND_THRESHOLD:.2f}) "
                     f"and complies with POL-REF-001."
                 ),
                 policy_id="POL-REF-001",
                 policy_version="1.0.0",
                 matched_rules=["REF-R02", "POL-REF-001.R2: Low-value refund auto-approval"],
-                relevant_facts={"payment_status": payment_status, "refund_amount": str(refund_amount)},
+                relevant_facts={
+                    "payment_status": payment_status,
+                    "refund_amount": str(refund_amount),
+                },
                 citations=citations,
             )
 
@@ -251,7 +289,10 @@ class PolicyEngine:
             return PolicyEvaluationResult(
                 allowed=True,
                 requires_approval=False,
-                decision="Logistics transit delay verified under POL-SHP-001. Proactive customer notification and ticket creation authorized.",
+                decision=(
+                    "Logistics transit delay verified under POL-SHP-001. "
+                    "Proactive customer notification and ticket creation authorized."
+                ),
                 policy_id="POL-SHP-001",
                 policy_version="1.0.0",
                 matched_rules=["SHP-R02", "POL-SHP-001.R2: Proactive transit delay escalation"],

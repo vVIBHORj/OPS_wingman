@@ -1,10 +1,12 @@
 """
 Operational Dashboard and Telemetry API Router (Phase 4 - Deliverable D-16).
-Provides read-only operational telemetry, workflow provenance, step traces, and system health aggregates.
+Provides read-only operational telemetry, workflow provenance, step traces,
+and system health aggregates.
 """
 
 import re
 from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from backend.api.operations_schemas import (
@@ -44,7 +46,10 @@ def _validate_run_id(run_id: str) -> None:
     if not run_id or not RUN_ID_REGEX.match(run_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Malformed run_id: '{run_id}'. Run identifiers must be 1-128 characters containing only letters, numbers, hyphens, or underscores.",
+            detail=(
+                f"Malformed run_id: '{run_id}'. Run identifiers must be 1-128 characters "
+                "containing only letters, numbers, hyphens, or underscores."
+            ),
         )
 
 
@@ -143,9 +148,7 @@ def _normalize_risk(risk_data: Optional[Dict[str, Any]]) -> Optional[RiskTelemet
         except (ValueError, TypeError):
             anomaly_score = None
 
-    anomaly_detected = bool(
-        anomaly_dict.get("is_anomaly", False) or len(anomaly_flags) > 0
-    )
+    anomaly_detected = bool(anomaly_dict.get("is_anomaly", False) or len(anomaly_flags) > 0)
 
     return RiskTelemetry(
         model_name=str(risk_data.get("model_name", "OperationalRiskModel")),
@@ -225,6 +228,7 @@ def _build_step_telemetry(run: WorkflowRunRecord) -> List[WorkflowStepTelemetry]
 # ==============================================================================
 # Read-Only Operational Endpoints
 # ==============================================================================
+
 
 @router.get("/summary", response_model=OperationalSummary, status_code=status.HTTP_200_OK)
 def get_operational_summary(
@@ -315,11 +319,16 @@ def get_operational_summary(
         high_risk_assessments=high_risk_assessments,
         anomalous_assessments=anomalous_assessments,
         data_source="in_memory_and_disk_checkpoints",
-        notes="Aggregate metrics derived from checkpoint store runs without requiring database migrations.",
+        notes=(
+            "Aggregate metrics derived from checkpoint store runs without requiring"
+            " database migrations."
+        ),
     )
 
 
-@router.get("/runs/{run_id}", response_model=WorkflowRunDetailResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/runs/{run_id}", response_model=WorkflowRunDetailResponse, status_code=status.HTTP_200_OK
+)
 def get_workflow_run_detail(run_id: str) -> WorkflowRunDetailResponse:
     """
     Returns full workflow run details including verification results, risk assessment,
@@ -360,7 +369,11 @@ def get_workflow_run_detail(run_id: str) -> WorkflowRunDetailResponse:
     )
 
 
-@router.get("/runs/{run_id}/steps", response_model=List[WorkflowStepTelemetry], status_code=status.HTTP_200_OK)
+@router.get(
+    "/runs/{run_id}/steps",
+    response_model=List[WorkflowStepTelemetry],
+    status_code=status.HTTP_200_OK,
+)
 def get_workflow_run_steps(run_id: str) -> List[WorkflowStepTelemetry]:
     """
     Returns ordered workflow/checkpoint steps with execution states, timestamps,
@@ -379,7 +392,9 @@ def get_workflow_run_steps(run_id: str) -> List[WorkflowStepTelemetry]:
     return _build_step_telemetry(run)
 
 
-@router.get("/runs/{run_id}/telemetry", response_model=WorkflowRunTelemetry, status_code=status.HTTP_200_OK)
+@router.get(
+    "/runs/{run_id}/telemetry", response_model=WorkflowRunTelemetry, status_code=status.HTTP_200_OK
+)
 def get_workflow_run_telemetry(run_id: str) -> WorkflowRunTelemetry:
     """
     Returns normalized operational telemetry summarizing executed tools, policy governance,
@@ -437,12 +452,18 @@ def get_workflow_run_telemetry(run_id: str) -> WorkflowRunTelemetry:
     idempotency_outcomes: Dict[str, Any] = {
         "total_records": len(run.resilience_records),
         "cached_count": sum(
-            1 for r in run.resilience_records if r.get("is_cached") is True or r.get("final_status") == "CACHED"
+            1
+            for r in run.resilience_records
+            if r.get("is_cached") is True or r.get("final_status") == "CACHED"
         ),
         "conflict_count": sum(1 for r in run.resilience_records if r.get("conflict") is True),
-        "completed_count": sum(1 for r in run.resilience_records if r.get("final_status") == "COMPLETED"),
+        "completed_count": sum(
+            1 for r in run.resilience_records if r.get("final_status") == "COMPLETED"
+        ),
         "failed_count": sum(1 for r in run.resilience_records if r.get("final_status") == "FAILED"),
-        "keys": [r.get("idempotency_key") for r in run.resilience_records if r.get("idempotency_key")],
+        "keys": [
+            r.get("idempotency_key") for r in run.resilience_records if r.get("idempotency_key")
+        ],
     }
 
     # Normalized subsystems
@@ -459,11 +480,17 @@ def get_workflow_run_telemetry(run_id: str) -> WorkflowRunTelemetry:
 
     # Failure information
     failure_information: Optional[Dict[str, Any]] = None
-    if state_str == WorkflowState.FAILED.value or run.error is not None or retry_exhausted or timeout_occurred:
+    if (
+        state_str == WorkflowState.FAILED.value
+        or run.error is not None
+        or retry_exhausted
+        or timeout_occurred
+    ):
         failed_steps = [
             s.step_name
             for s in run.steps
-            if (s.state.value if hasattr(s.state, "value") else str(s.state)) == WorkflowState.FAILED.value
+            if (s.state.value if hasattr(s.state, "value") else str(s.state))
+            == WorkflowState.FAILED.value
             or s.error is not None
         ]
         resilience_failures = [

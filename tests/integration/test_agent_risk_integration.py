@@ -3,9 +3,12 @@
 Verifies:
 1. assess_risk LangGraph node execution between execute_tools and evaluate_policy.
 2. Low-risk order evaluation -> normal flow, LOW risk band, auto-approval for low-value refund.
-3. Elevated ML risk / anomaly gating -> forces approval on otherwise auto-approved low-value refunds (POL-REF-001.R4).
-4. Order cancellation with elevated ML risk -> matches POL-CAN-001.R5, records risk factors, and updates proposed action risk to HIGH.
-5. Model version, features, and explainability provenance persisted in WorkflowRunRecord and checkpoint store.
+3. Elevated ML risk / anomaly gating -> forces approval on otherwise auto-approved
+   low-value refunds (POL-REF-001.R4).
+4. Order cancellation with elevated ML risk -> matches POL-CAN-001.R5, records risk factors,
+   and updates proposed action risk to HIGH.
+5. Model version, features, and explainability provenance persisted in WorkflowRunRecord
+   and checkpoint store.
 6. Approval resumption preserves risk_assessment and performs post-action verification.
 7. Read-only invariant: assess_risk queries database entities without modifying them.
 8. Fallback behavior when database session is not provided or order entity is missing.
@@ -14,11 +17,10 @@ Verifies:
 
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, Optional
+
 import pytest
 from sqlalchemy.orm import Session
 
-import simulator
 from backend.agents.ops_agent import OpsAgent
 from backend.agents.service import OpsAgentService
 from backend.ml import (
@@ -28,14 +30,18 @@ from backend.ml import (
     RiskAssessmentResult,
     RiskBand,
     RiskFeatureVector,
-    ml_risk_service,
 )
-from backend.policies.engine import PolicyEngine
 from backend.rag.seed_knowledge import seed_default_knowledge
-from backend.tools.base import RiskLevel
-from backend.workflows.checkpoint import checkpoint_store
-from backend.workflows.state import WorkflowRunRecord, WorkflowState
-from database.models import Customer, Order, OrderStatus, Payment, PaymentMethod, PaymentStatus, Product, Shipment, ShipmentStatus
+from backend.workflows.state import WorkflowState
+from database.models import (
+    Customer,
+    Order,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+    PaymentStatus,
+    Product,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -105,7 +111,9 @@ def _setup_test_order(
 
 
 def test_assess_risk_node_in_graph_pipeline():
-    """Verify assess_risk node is registered and placed between execute_tools and evaluate_policy."""
+    """Verify assess_risk node is registered and placed between execute_tools
+    and evaluate_policy.
+    """
     agent = OpsAgent()
     nodes = agent.graph.nodes
     assert "assess_risk" in nodes
@@ -158,7 +166,9 @@ def test_low_value_refund_auto_approved_when_low_risk(db_session: Session):
 
 
 def test_low_value_refund_gated_by_ml_anomaly(db_session: Session):
-    """Verify low-value refund (<= 2000) is GATED when ML risk model flags an anomaly or HIGH risk."""
+    """Verify low-value refund (<= 2000) is GATED when ML risk model flags
+    an anomaly or HIGH risk.
+    """
     cust, order, _ = _setup_test_order(db_session, amount=Decimal("1200.00"))
 
     # Create custom ML service that flags high risk / anomaly
@@ -209,7 +219,9 @@ def test_low_value_refund_gated_by_ml_anomaly(db_session: Session):
 
 
 def test_order_cancellation_reflects_elevated_ml_risk(db_session: Session):
-    """Verify order cancellation includes ML risk score and anomaly reasons in policy decision facts."""
+    """Verify order cancellation includes ML risk score and anomaly reasons in policy
+    decision facts.
+    """
     cust, order, _ = _setup_test_order(db_session, amount=Decimal("3000.00"))
 
     class AnomalyRiskModel(OperationalRiskModel):
@@ -253,7 +265,9 @@ def test_order_cancellation_reflects_elevated_ml_risk(db_session: Session):
 
 
 def test_approval_resumption_preserves_risk_assessment_and_verifies(db_session: Session):
-    """Verify approved-action resume preserves the original risk_assessment on WorkflowRunRecord and executes verification."""
+    """Verify approved-action resume preserves the original risk_assessment on
+    WorkflowRunRecord and executes verification.
+    """
     cust, order, payment = _setup_test_order(db_session, amount=Decimal("1200.00"))
 
     class GatedModel(OperationalRiskModel):

@@ -4,24 +4,25 @@ Records domain events synchronously within the active transaction.
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from datetime import datetime, timezone, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database.models import (
-    Order,
-    Shipment,
-    OrderStatus,
-    ShipmentStatus,
     EventType,
-)
-from simulator.exceptions import (
-    EntityNotFoundError,
-    InvalidStateTransitionError,
-    BusinessRuleViolationError,
+    Order,
+    OrderStatus,
+    Shipment,
+    ShipmentStatus,
 )
 from simulator.events import record_event
+from simulator.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    InvalidStateTransitionError,
+)
 
 SHIPMENT_TRANSITIONS = {
     ShipmentStatus.MANIFESTED: {
@@ -49,7 +50,7 @@ SHIPMENT_TRANSITIONS = {
         ShipmentStatus.RETURNED,
     },
     ShipmentStatus.DELIVERED: set(),  # Terminal state
-    ShipmentStatus.RETURNED: set(),   # Terminal state
+    ShipmentStatus.RETURNED: set(),  # Terminal state
 }
 
 
@@ -73,7 +74,9 @@ def create_shipment(
         raise EntityNotFoundError(f"Order {order_id} not found.")
 
     if order.status == OrderStatus.CANCELLED:
-        raise BusinessRuleViolationError(f"Cannot create shipment for cancelled order {order.order_number}.")
+        raise BusinessRuleViolationError(
+            f"Cannot create shipment for cancelled order {order.order_number}."
+        )
 
     if order.status == OrderStatus.DELIVERED:
         raise BusinessRuleViolationError(f"Order {order.order_number} is already delivered.")
@@ -126,7 +129,9 @@ def create_shipment(
             "carrier": shipment.carrier,
             "tracking_number": shipment.tracking_number,
             "status": shipment.status.value,
-            "estimated_delivery_date": shipment.estimated_delivery_date.isoformat() if shipment.estimated_delivery_date else None,
+            "estimated_delivery_date": shipment.estimated_delivery_date.isoformat()
+            if shipment.estimated_delivery_date
+            else None,
         },
         correlation_id=correlation_id,
     )
@@ -145,7 +150,9 @@ def get_shipment(
     if shipment_id:
         shipment = session.get(Shipment, shipment_id)
     elif tracking_number:
-        shipment = session.scalar(select(Shipment).where(Shipment.tracking_number == tracking_number))
+        shipment = session.scalar(
+            select(Shipment).where(Shipment.tracking_number == tracking_number)
+        )
     else:
         raise ValueError("Must provide either shipment_id or tracking_number.")
 
@@ -259,7 +266,9 @@ def delay_shipment(
             "previous_status": prev_status.value,
             "new_status": ShipmentStatus.DELAYED.value,
             "delay_reason": shipment.delay_reason,
-            "revised_eta": shipment.estimated_delivery_date.isoformat() if shipment.estimated_delivery_date else None,
+            "revised_eta": shipment.estimated_delivery_date.isoformat()
+            if shipment.estimated_delivery_date
+            else None,
             "current_location": shipment.current_location,
         },
         correlation_id=correlation_id,
@@ -331,12 +340,13 @@ def deliver_shipment(
             "carrier": shipment.carrier,
             "previous_status": prev_status.value,
             "new_status": ShipmentStatus.DELIVERED.value,
-            "actual_delivery_date": actual_delivery_val.isoformat() if actual_delivery_val is not None else None,
+            "actual_delivery_date": actual_delivery_val.isoformat()
+            if actual_delivery_val is not None
+            else None,
             "recipient_notes": recipient_notes,
         },
         correlation_id=correlation_id,
     )
-
 
     session.commit()
     session.refresh(shipment)

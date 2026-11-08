@@ -9,16 +9,19 @@ from __future__ import annotations
 import re
 import uuid
 from typing import Any, Dict, List, Optional, TypedDict, cast
-from langgraph.graph import StateGraph, END
-from sqlalchemy.orm import Session
 
 import simulator
+from langgraph.graph import END, StateGraph
+from sqlalchemy.orm import Session
+
 from backend.approvals.service import ApprovalService
 from backend.audit import (
-    AuditService,
-    audit_service as default_audit_service,
-    AuditEventType,
     AuditEventCreate,
+    AuditEventType,
+    AuditService,
+)
+from backend.audit import (
+    audit_service as default_audit_service,
 )
 from backend.ml import (
     AnomalyInfo,
@@ -36,7 +39,11 @@ from backend.resilience import (
     IdempotencyService,
     ResilientToolExecutor,
     RetryExecutor,
+)
+from backend.resilience import (
     idempotency_service as default_idempotency_service,
+)
+from backend.resilience import (
     retry_executor as default_retry_executor,
 )
 from backend.tools.base import RiskLevel, ToolRegistry
@@ -44,17 +51,16 @@ from backend.tools.registry import create_default_tool_registry
 from backend.verification import (
     StateVerificationService,
     VerificationRequest,
-    VerificationResult,
     VerificationStatus,
     state_verification_service,
 )
 from backend.workflows.checkpoint import checkpoint_store
 from backend.workflows.state import StructuredAction, WorkflowRunRecord, WorkflowState
-from database.models.enums import ApprovalStatus
 
 
 class AgentGraphState(TypedDict, total=False):
     """Execution state schema flowing through the LangGraph agent."""
+
     workflow_id: str
     run_id: str
     input_text: str
@@ -163,9 +169,14 @@ class OpsAgent:
         text_lower = text.lower()
         if any(k in text_lower for k in ["cancel", "cancellation", "abort order"]):
             intent = "cancel_order_request"
-        elif any(k in text_lower for k in ["refund", "money back", "return payment", "refund everything"]):
+        elif any(
+            k in text_lower for k in ["refund", "money back", "return payment", "refund everything"]
+        ):
             intent = "request_refund"
-        elif any(k in text_lower for k in ["track", "shipment", "courier", "delivery status", "where is my"]):
+        elif any(
+            k in text_lower
+            for k in ["track", "shipment", "courier", "delivery status", "where is my"]
+        ):
             intent = "track_shipment"
         elif any(k in text_lower for k in ["payment", "charged", "invoice"]):
             intent = "check_payment_status"
@@ -217,7 +228,7 @@ class OpsAgent:
                     RetrievalRequest(query=input_text, top_k=3, min_similarity=0.0)
                 )
                 citations = [c.model_dump() for c in retrieval_res.results]
-            except Exception as e:
+            except Exception:
                 citations = []
 
         run_id = state.get("run_id", "")
@@ -247,28 +258,32 @@ class OpsAgent:
             planned.extend(["get_order", "get_payment"])
         elif intent == "cancel_order_request":
             planned.extend(["get_order", "get_shipment"])
-            proposed_actions.append({
-                "action": "cancel_order",
-                "parameters": {
-                    "order_number": state.get("order_number"),
-                    "reason": "Customer cancellation request",
-                },
-                "reason": "Customer explicitly requested order cancellation",
-                "risk": RiskLevel.HIGH.value,
-                "requires_approval": True,
-            })
+            proposed_actions.append(
+                {
+                    "action": "cancel_order",
+                    "parameters": {
+                        "order_number": state.get("order_number"),
+                        "reason": "Customer cancellation request",
+                    },
+                    "reason": "Customer explicitly requested order cancellation",
+                    "risk": RiskLevel.HIGH.value,
+                    "requires_approval": True,
+                }
+            )
         elif intent == "request_refund":
             planned.extend(["get_order", "get_payment"])
-            proposed_actions.append({
-                "action": "request_refund",
-                "parameters": {
-                    "order_number": state.get("order_number"),
-                    "reason": "Customer refund request",
-                },
-                "reason": "Customer requested refund for transaction",
-                "risk": RiskLevel.HIGH.value,
-                "requires_approval": True,
-            })
+            proposed_actions.append(
+                {
+                    "action": "request_refund",
+                    "parameters": {
+                        "order_number": state.get("order_number"),
+                        "reason": "Customer refund request",
+                    },
+                    "reason": "Customer requested refund for transaction",
+                    "risk": RiskLevel.HIGH.value,
+                    "requires_approval": True,
+                }
+            )
 
         run_id = state.get("run_id", "")
         checkpoint_store.add_step(
@@ -284,7 +299,10 @@ class OpsAgent:
                 event_type=AuditEventType.TOOL_PLANNED,
                 actor="OpsAgent",
                 workflow_state=WorkflowState.RUNNING.value,
-                metadata_provenance={"planned_tools": planned, "proposed_actions": proposed_actions},
+                metadata_provenance={
+                    "planned_tools": planned,
+                    "proposed_actions": proposed_actions,
+                },
                 success=True,
             ),
             session=state.get("db"),
@@ -329,11 +347,15 @@ class OpsAgent:
                 elif order_id:
                     params["order_id"] = order_id
 
-            tool_context = {
-                "db": db,
-                "workflow_id": state.get("workflow_id", run_id),
-                "run_id": run_id,
-            } if db else None
+            tool_context = (
+                {
+                    "db": db,
+                    "workflow_id": state.get("workflow_id", run_id),
+                    "run_id": run_id,
+                }
+                if db
+                else None
+            )
             res = self.tools.execute(tool_name, params=params, context=tool_context)
             results[tool_name] = res.model_dump()
             executed.append(tool_name)
@@ -357,7 +379,9 @@ class OpsAgent:
                 result=res.data if res.success else None,
                 success=res.success,
                 error=res.error,
-                workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                workflow_state=WorkflowState.RUNNING.value
+                if res.success
+                else WorkflowState.FAILED.value,
                 resilience_metadata=res.resilience_metadata,
                 session=db,
             )
@@ -401,7 +425,10 @@ class OpsAgent:
                 order_amount = float(order_data.get("total_amount", 0.0) or 0.0)
                 delivery_delay_hours = (
                     24.0
-                    if (shipment_data.get("delay_reason") or shipment_data.get("status") == "DELAYED")
+                    if (
+                        shipment_data.get("delay_reason")
+                        or shipment_data.get("status") == "DELAYED"
+                    )
                     else 0.0
                 )
                 failed_payments = 1 if payment_data.get("status") == "FAILED" else 0
@@ -565,9 +592,7 @@ class OpsAgent:
             )
 
         wf_state = (
-            WorkflowState.WAITING_FOR_APPROVAL
-            if requires_approval
-            else WorkflowState.RUNNING
+            WorkflowState.WAITING_FOR_APPROVAL if requires_approval else WorkflowState.RUNNING
         )
 
         checkpoint_store.add_step(
@@ -610,14 +635,21 @@ class OpsAgent:
             data = res_dict.get("data") or {}
 
             if tool_name == "cancel_order":
-                order_id = data.get("id") or data.get("order_number") or state.get("order_id") or state.get("order_number")
+                order_id = (
+                    data.get("id")
+                    or data.get("order_number")
+                    or state.get("order_id")
+                    or state.get("order_number")
+                )
                 if order_id:
                     ver_req = VerificationRequest(
                         entity_type="order",
                         entity_id=str(order_id),
                         target_state="CANCELLED",
                         operation="cancel_order",
-                        expected_attributes={"cancellation_reason": data.get("cancellation_reason")} if data.get("cancellation_reason") else {},
+                        expected_attributes={"cancellation_reason": data.get("cancellation_reason")}
+                        if data.get("cancellation_reason")
+                        else {},
                     )
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
@@ -626,11 +658,14 @@ class OpsAgent:
                         run_id=run_id,
                         verification_result=ver_dump,
                         operation=tool_name,
-                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        workflow_state=WorkflowState.RUNNING.value
+                        if ver_res.verified
+                        else WorkflowState.FAILED.value,
                         session=db,
                     )
                     if not ver_res.verified:
-                        errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
+                        disc = ", ".join(ver_res.discrepancies) or ver_res.error or "State mismatch"
+                        errors.append(f"Verification {ver_res.status.value}: {disc}")
 
             elif tool_name == "request_refund":
                 order_id = data.get("order_id") or state.get("order_id")
@@ -648,11 +683,14 @@ class OpsAgent:
                         run_id=run_id,
                         verification_result=ver_dump,
                         operation=tool_name,
-                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        workflow_state=WorkflowState.RUNNING.value
+                        if ver_res.verified
+                        else WorkflowState.FAILED.value,
                         session=db,
                     )
                     if not ver_res.verified:
-                        errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
+                        disc = ", ".join(ver_res.discrepancies) or ver_res.error or "State mismatch"
+                        errors.append(f"Verification {ver_res.status.value}: {disc}")
 
             elif tool_name == "create_ticket":
                 ticket_id = data.get("id") or data.get("ticket_number")
@@ -662,7 +700,9 @@ class OpsAgent:
                         entity_id=str(ticket_id),
                         target_state="OPEN",
                         operation="create_ticket",
-                        expected_attributes={"priority": data.get("priority")} if data.get("priority") else {},
+                        expected_attributes={"priority": data.get("priority")}
+                        if data.get("priority")
+                        else {},
                     )
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
@@ -671,15 +711,19 @@ class OpsAgent:
                         run_id=run_id,
                         verification_result=ver_dump,
                         operation=tool_name,
-                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        workflow_state=WorkflowState.RUNNING.value
+                        if ver_res.verified
+                        else WorkflowState.FAILED.value,
                         session=db,
                     )
                     if not ver_res.verified:
-                        errors.append(f"Verification {ver_res.status.value}: {', '.join(ver_res.discrepancies) or ver_res.error or 'State mismatch'}")
+                        disc = ", ".join(ver_res.discrepancies) or ver_res.error or "State mismatch"
+                        errors.append(f"Verification {ver_res.status.value}: {disc}")
 
         if verification_results:
             has_divergence = any(
-                r.get("status") in [
+                r.get("status")
+                in [
                     VerificationStatus.DIVERGENT.value,
                     VerificationStatus.NOT_FOUND.value,
                     VerificationStatus.ERROR.value,
@@ -705,7 +749,8 @@ class OpsAgent:
         return updated_state
 
     def _node_synthesize_response(self, state: AgentGraphState) -> Dict[str, Any]:
-        """Synthesizes human-readable operational response based on retrieved data and policy decisions."""
+        """Synthesizes human-readable operational response based on retrieved data and policy
+        decisions."""
         intent = state.get("intent", "general_order_inquiry")
         tool_results = state.get("tool_results", {})
         order_info = tool_results.get("get_order", {}).get("data")
@@ -726,8 +771,10 @@ class OpsAgent:
         ver_results = state.get("verification_results", [])
         ver_failure = next(
             (
-                r for r in ver_results
-                if r.get("status") in [
+                r
+                for r in ver_results
+                if r.get("status")
+                in [
                     VerificationStatus.DIVERGENT.value,
                     VerificationStatus.NOT_FOUND.value,
                     VerificationStatus.ERROR.value,
@@ -738,60 +785,90 @@ class OpsAgent:
 
         err_details: Optional[str] = None
         if ver_failure:
-            err_details = ", ".join(ver_failure.get("discrepancies", [])) or ver_failure.get("error") or ver_failure.get("status")
-            response = f"Action execution failed post-action state verification ({ver_failure.get('status')}): {err_details}"
+            err_details = (
+                ", ".join(ver_failure.get("discrepancies", []))
+                or ver_failure.get("error")
+                or ver_failure.get("status")
+            )
+            response = (
+                f"Action execution failed post-action state verification "
+                f"({ver_failure.get('status')}): {err_details}"
+            )
             final_state = WorkflowState.FAILED
         elif state.get("workflow_state") == WorkflowState.FAILED.value and state.get("error"):
             response = f"Workflow execution failed: {state.get('error')}"
             final_state = WorkflowState.FAILED
         elif not order_info and not state.get("order_number"):
-            response = "Thank you for reaching out to OpsWingman. Could you please provide your Order Number (e.g., ORD-YYYYMMDD-XXXXXX) so I can retrieve your details?"
+            response = (
+                "Thank you for reaching out to OpsWingman. Could you please provide your Order "
+                "Number (e.g., ORD-YYYYMMDD-XXXXXX) so I can retrieve your details?"
+            )
             final_state = WorkflowState.COMPLETED
         elif not order_info:
             err = tool_results.get("get_order", {}).get("error", "Order not found")
-            response = f"I could not locate an order with reference {state.get('order_number')}. Error: {err}. Please verify your order number."
+            response = (
+                f"I could not locate an order with reference {state.get('order_number')}. "
+                f"Error: {err}. Please verify your order number."
+            )
             final_state = WorkflowState.COMPLETED
         elif intent == "cancel_order_request":
             # Check policy evaluation decision
             pol_dec = policy_decisions[0] if policy_decisions else None
             if pol_dec and not pol_dec.get("allowed"):
                 response = (
-                    f"Cancellation Denied for order {order_info.get('order_number')}: {pol_dec.get('decision')}. "
-                    f"Under policy {pol_dec.get('policy_id')} v{pol_dec.get('policy_version')}, shipped orders cannot be cancelled directly."
+                    f"Cancellation Denied for order {order_info.get('order_number')}: "
+                    f"{pol_dec.get('decision')}. "
+                    f"Under policy {pol_dec.get('policy_id')} v{pol_dec.get('policy_version')}, "
+                    "shipped orders cannot be cancelled directly."
                     + citation_suffix
                 )
                 final_state = WorkflowState.COMPLETED
             elif requires_approval:
                 response = (
-                    f"Your cancellation request for order {order_info.get('order_number')} (Status: {order_info.get('status')}) "
-                    f"has been submitted for supervisor approval (Approval ID: {approval_id or 'Pending'}). "
-                    f"Policy Decision: {pol_dec.get('decision') if pol_dec else 'Approval Required'}."
+                    f"Your cancellation request for order {order_info.get('order_number')} "
+                    f"(Status: {order_info.get('status')}) has been submitted for supervisor "
+                    f"approval (Approval ID: {approval_id or 'Pending'}). "
+                    f"Policy Decision: "
+                    f"{pol_dec.get('decision') if pol_dec else 'Approval Required'}."
                     + citation_suffix
                 )
                 final_state = WorkflowState.WAITING_FOR_APPROVAL
             else:
-                response = f"Cancellation request for order {order_info.get('order_number')} processed successfully." + citation_suffix
+                response = (
+                    f"Cancellation request for order {order_info.get('order_number')} "
+                    "processed successfully."
+                    + citation_suffix
+                )
                 final_state = WorkflowState.COMPLETED
 
         elif intent == "request_refund":
             pol_dec = policy_decisions[0] if policy_decisions else None
             if pol_dec and not pol_dec.get("allowed"):
                 response = (
-                    f"Refund Denied for order {order_info.get('order_number')}: {pol_dec.get('decision')}. "
-                    f"Policy reference: {pol_dec.get('policy_id')} v{pol_dec.get('policy_version')}."
+                    f"Refund Denied for order {order_info.get('order_number')}: "
+                    f"{pol_dec.get('decision')}. "
+                    f"Policy reference: {pol_dec.get('policy_id')} "
+                    f"v{pol_dec.get('policy_version')}."
                     + citation_suffix
                 )
                 final_state = WorkflowState.COMPLETED
             elif requires_approval:
                 response = (
-                    f"Your refund request for order {order_info.get('order_number')} (Amount: INR {order_info.get('total_amount')}) "
-                    f"exceeds the automatic refund threshold and has been submitted to a supervisor for approval (Approval ID: {approval_id or 'Pending'}). "
-                    f"Policy Decision: {pol_dec.get('decision') if pol_dec else 'Approval Required'}."
+                    f"Your refund request for order {order_info.get('order_number')} "
+                    f"(Amount: INR {order_info.get('total_amount')}) exceeds the automatic "
+                    "refund threshold and has been submitted to a supervisor for approval "
+                    f"(Approval ID: {approval_id or 'Pending'}). "
+                    f"Policy Decision: "
+                    f"{pol_dec.get('decision') if pol_dec else 'Approval Required'}."
                     + citation_suffix
                 )
                 final_state = WorkflowState.WAITING_FOR_APPROVAL
             else:
-                response = f"Refund request for order {order_info.get('order_number')} approved under policy." + citation_suffix
+                response = (
+                    f"Refund request for order {order_info.get('order_number')} approved under "
+                    "policy."
+                    + citation_suffix
+                )
                 final_state = WorkflowState.COMPLETED
 
         elif intent in ["track_shipment", "check_order_status", "general_order_inquiry"]:
@@ -800,7 +877,9 @@ class OpsAgent:
             total = order_info.get("total_amount")
             currency = order_info.get("currency", "INR")
 
-            parts = [f"Order {order_num} is currently in {status} state (Total: {currency} {total})."]
+            parts = [
+                f"Order {order_num} is currently in {status} state (Total: {currency} {total})."
+            ]
 
             if shipment_info:
                 carrier = shipment_info.get("carrier")
@@ -820,10 +899,16 @@ class OpsAgent:
             order_num = order_info.get("order_number")
             pay_status = payment_info.get("status") if payment_info else "UNKNOWN"
             amount = payment_info.get("amount") if payment_info else order_info.get("total_amount")
-            response = f"Order {order_num} payment status is {pay_status} for amount INR {amount}." + citation_suffix
+            response = (
+                f"Order {order_num} payment status is {pay_status} for amount INR {amount}."
+                + citation_suffix
+            )
             final_state = WorkflowState.COMPLETED
         else:
-            response = f"Order {order_info.get('order_number')} details retrieved successfully." + citation_suffix
+            response = (
+                f"Order {order_info.get('order_number')} details retrieved successfully."
+                + citation_suffix
+            )
             final_state = WorkflowState.COMPLETED
 
         checkpoint_store.add_step(
@@ -842,7 +927,9 @@ class OpsAgent:
                 run_record.error = state.get("error") or (err_details if ver_failure else None)
             run_record.intent = intent
             run_record.extracted_entities = state.get("extracted_entities", {})
-            run_record.proposed_actions = [StructuredAction(**a) for a in state.get("proposed_actions", [])]
+            run_record.proposed_actions = [
+                StructuredAction(**a) for a in state.get("proposed_actions", [])
+            ]
             run_record.citations = state.get("retrieved_citations", [])
             run_record.policy_decisions = state.get("policy_decisions", [])
             run_record.verification_results = state.get("verification_results", [])
@@ -911,7 +998,11 @@ class OpsAgent:
                 event_type=AuditEventType.REQUEST_RECEIVED,
                 actor="user",
                 workflow_state=WorkflowState.CREATED.value,
-                tool_arguments={"input_text": input_text, "order_number": order_number, "customer_id": customer_id},
+                tool_arguments={
+                    "input_text": input_text,
+                    "order_number": order_number,
+                    "customer_id": customer_id,
+                },
                 metadata_provenance={"workflow_id": wf_id},
             ),
             session=db,
@@ -954,7 +1045,8 @@ class OpsAgent:
         """Resumes a paused workflow run awaiting human approval.
 
         If approved: executes the gated structured action using approved authorization token,
-        performs post-action state verification against persistent database truth, and synthesizes response.
+        performs post-action state verification against persistent database truth, and
+        synthesizes response.
         If rejected: marks workflow CANCELLED without executing action.
         """
         run_record = checkpoint_store.get(run_id)
@@ -963,7 +1055,8 @@ class OpsAgent:
 
         if run_record.state != WorkflowState.WAITING_FOR_APPROVAL:
             raise ValueError(
-                f"Workflow run '{run_id}' is in state '{run_record.state.value}', not WAITING_FOR_APPROVAL."
+                f"Workflow run '{run_id}' is in state '{run_record.state.value}', "
+                "not WAITING_FOR_APPROVAL."
             )
 
         if not approved:
@@ -1036,7 +1129,9 @@ class OpsAgent:
                     arguments={"order_id": order_id, "reason": action.reason},
                     result=res.model_dump(),
                     resilience_metadata=res.resilience_metadata,
-                    workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                    workflow_state=WorkflowState.RUNNING.value
+                    if res.success
+                    else WorkflowState.FAILED.value,
                     session=db,
                 )
 
@@ -1053,7 +1148,9 @@ class OpsAgent:
                 if not res.success:
                     run_record.state = WorkflowState.FAILED
                     run_record.error = res.error
-                    run_record.final_response = f"Failed to execute approved cancellation: {res.error}"
+                    run_record.final_response = (
+                        f"Failed to execute approved cancellation: {res.error}"
+                    )
                     self.audit_service.record_workflow_failure(
                         run_id=run_id,
                         workflow_state=WorkflowState.FAILED.value,
@@ -1070,7 +1167,9 @@ class OpsAgent:
                         entity_id=str(order_id),
                         target_state="CANCELLED",
                         operation="cancel_order",
-                        expected_attributes={"cancellation_reason": action.reason} if action.reason else {},
+                        expected_attributes={"cancellation_reason": action.reason}
+                        if action.reason
+                        else {},
                     )
                     ver_res = self.verification_service.verify(session=db, request=ver_req)
                     ver_dump = ver_res.model_dump(mode="json")
@@ -1080,7 +1179,9 @@ class OpsAgent:
                         run_id=run_id,
                         verification_result=ver_dump,
                         operation="cancel_order",
-                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        workflow_state=WorkflowState.RUNNING.value
+                        if ver_res.verified
+                        else WorkflowState.FAILED.value,
                         session=db,
                     )
 
@@ -1091,15 +1192,26 @@ class OpsAgent:
                         tool_name="cancel_order",
                         input_payload=ver_req.model_dump(mode="json"),
                         output_payload=ver_dump,
-                        error=ver_res.error or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
+                        error=ver_res.error
+                        or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
                     )
 
                     if not ver_res.verified:
                         run_record.state = WorkflowState.FAILED
-                        err_details = ", ".join(ver_res.discrepancies) or ver_res.error or f"State verification failed with status {ver_res.status.value}"
-                        err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
+                        err_details = (
+                            ", ".join(ver_res.discrepancies)
+                            or ver_res.error
+                            or f"State verification failed with status {ver_res.status.value}"
+                        )
+                        err_msg = (
+                            f"Post-action verification failed [{ver_res.status.value}]: "
+                            f"{err_details}"
+                        )
                         run_record.error = err_msg
-                        run_record.final_response = f"Approved cancellation executed but state verification failed ({ver_res.status.value}): {err_details}"
+                        run_record.final_response = (
+                            "Approved cancellation executed but state verification failed "
+                            f"({ver_res.status.value}): {err_details}"
+                        )
                         self.audit_service.record_workflow_failure(
                             run_id=run_id,
                             workflow_state=WorkflowState.FAILED.value,
@@ -1141,7 +1253,9 @@ class OpsAgent:
                     arguments={"order_id": order_id, "reason": action.reason},
                     result=res.model_dump(),
                     resilience_metadata=res.resilience_metadata,
-                    workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                    workflow_state=WorkflowState.RUNNING.value
+                    if res.success
+                    else WorkflowState.FAILED.value,
                     session=db,
                 )
 
@@ -1183,7 +1297,9 @@ class OpsAgent:
                         run_id=run_id,
                         verification_result=ver_dump,
                         operation="request_refund",
-                        workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                        workflow_state=WorkflowState.RUNNING.value
+                        if ver_res.verified
+                        else WorkflowState.FAILED.value,
                         session=db,
                     )
 
@@ -1194,15 +1310,26 @@ class OpsAgent:
                         tool_name="request_refund",
                         input_payload=ver_req.model_dump(mode="json"),
                         output_payload=ver_dump,
-                        error=ver_res.error or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
+                        error=ver_res.error
+                        or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
                     )
 
                     if not ver_res.verified:
                         run_record.state = WorkflowState.FAILED
-                        err_details = ", ".join(ver_res.discrepancies) or ver_res.error or f"State verification failed with status {ver_res.status.value}"
-                        err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
+                        err_details = (
+                            ", ".join(ver_res.discrepancies)
+                            or ver_res.error
+                            or f"State verification failed with status {ver_res.status.value}"
+                        )
+                        err_msg = (
+                            f"Post-action verification failed [{ver_res.status.value}]: "
+                            f"{err_details}"
+                        )
                         run_record.error = err_msg
-                        run_record.final_response = f"Approved refund executed but state verification failed ({ver_res.status.value}): {err_details}"
+                        run_record.final_response = (
+                            "Approved refund executed but state verification failed "
+                            f"({ver_res.status.value}): {err_details}"
+                        )
                         self.audit_service.record_workflow_failure(
                             run_id=run_id,
                             workflow_state=WorkflowState.FAILED.value,
@@ -1233,7 +1360,9 @@ class OpsAgent:
                     arguments=action.parameters,
                     result=res.model_dump(),
                     resilience_metadata=res.resilience_metadata,
-                    workflow_state=WorkflowState.RUNNING.value if res.success else WorkflowState.FAILED.value,
+                    workflow_state=WorkflowState.RUNNING.value
+                    if res.success
+                    else WorkflowState.FAILED.value,
                     session=db,
                 )
 
@@ -1249,7 +1378,9 @@ class OpsAgent:
                 if not res.success:
                     run_record.state = WorkflowState.FAILED
                     run_record.error = res.error
-                    run_record.final_response = f"Failed to execute approved ticket creation: {res.error}"
+                    run_record.final_response = (
+                        f"Failed to execute approved ticket creation: {res.error}"
+                    )
                     self.audit_service.record_workflow_failure(
                         run_id=run_id,
                         workflow_state=WorkflowState.FAILED.value,
@@ -1267,7 +1398,9 @@ class OpsAgent:
                             entity_id=str(ticket_id),
                             target_state="OPEN",
                             operation="create_ticket",
-                            expected_attributes={"priority": res.data.get("priority")} if res.data.get("priority") else {},
+                            expected_attributes={"priority": res.data.get("priority")}
+                            if res.data.get("priority")
+                            else {},
                         )
                         ver_res = self.verification_service.verify(session=db, request=ver_req)
                         ver_dump = ver_res.model_dump(mode="json")
@@ -1277,26 +1410,41 @@ class OpsAgent:
                             run_id=run_id,
                             verification_result=ver_dump,
                             operation="create_ticket",
-                            workflow_state=WorkflowState.RUNNING.value if ver_res.verified else WorkflowState.FAILED.value,
+                            workflow_state=WorkflowState.RUNNING.value
+                            if ver_res.verified
+                            else WorkflowState.FAILED.value,
                             session=db,
                         )
 
                         checkpoint_store.add_step(
                             run_id=run_id,
                             step_name="verify_execution_create_ticket",
-                            state=WorkflowState.RUNNING if ver_res.verified else WorkflowState.FAILED,
+                            state=WorkflowState.RUNNING
+                            if ver_res.verified
+                            else WorkflowState.FAILED,
                             tool_name="create_ticket",
                             input_payload=ver_req.model_dump(mode="json"),
                             output_payload=ver_dump,
-                            error=ver_res.error or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
+                            error=ver_res.error
+                            or (", ".join(ver_res.discrepancies) if not ver_res.verified else None),
                         )
 
                         if not ver_res.verified:
                             run_record.state = WorkflowState.FAILED
-                            err_details = ", ".join(ver_res.discrepancies) or ver_res.error or f"State verification failed with status {ver_res.status.value}"
-                            err_msg = f"Post-action verification failed [{ver_res.status.value}]: {err_details}"
+                            err_details = (
+                                ", ".join(ver_res.discrepancies)
+                                or ver_res.error
+                                or f"State verification failed with status {ver_res.status.value}"
+                            )
+                            err_msg = (
+                                f"Post-action verification failed [{ver_res.status.value}]: "
+                                f"{err_details}"
+                            )
                             run_record.error = err_msg
-                            run_record.final_response = f"Approved ticket creation executed but state verification failed ({ver_res.status.value}): {err_details}"
+                            run_record.final_response = (
+                                "Approved ticket creation executed but state verification failed "
+                                f"({ver_res.status.value}): {err_details}"
+                            )
                             self.audit_service.record_workflow_failure(
                                 run_id=run_id,
                                 workflow_state=WorkflowState.FAILED.value,

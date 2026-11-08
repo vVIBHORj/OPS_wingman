@@ -1,6 +1,7 @@
 """Unit tests for Phase 3 D-11 Policy Engine."""
 
 import pytest
+
 from backend.policies.engine import PolicyEngine
 from backend.rag.schemas import KnowledgeCitation
 from backend.tools.schemas import StructuredAction
@@ -146,6 +147,7 @@ def test_prompt_injection_does_not_bypass_policy(engine: PolicyEngine):
         "refund_amount": 50000.0,
     }
     result = engine.evaluate(action, facts)
-    # The policy engine rejects it deterministically based on facts, ignoring prompt injected reason/risk claim
+    # The policy engine rejects it deterministically based on facts, ignoring prompt
+    # injected reason/risk claim
     assert result.allowed is False
     assert "REF-R01" in result.matched_rules

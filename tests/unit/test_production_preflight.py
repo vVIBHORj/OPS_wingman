@@ -11,18 +11,14 @@ Verifies:
 """
 
 import argparse
-from pathlib import Path
 import shutil
-from typing import Any, Dict
-import pytest
-import yaml
 
-from scripts.ops import cmd_preflight, run_preflight_checks, REPO_ROOT
-
+from scripts.ops import REPO_ROOT, cmd_preflight, run_preflight_checks
 
 # ==============================================================================
 # 1. Base Preflight & CLI Command Execution
 # ==============================================================================
+
 
 def test_preflight_success_baseline():
     """Verifies that running preflight on the current repository succeeds with 0 FAIL items."""
@@ -61,6 +57,7 @@ def test_missing_optional_credentials_produce_warn(monkeypatch):
 # 2. Failure Detection Scenarios (Isolated Test Environments)
 # ==============================================================================
 
+
 def test_invalid_manifest_produces_fail(tmp_path):
     """Verifies that a missing or corrupted manifest causes preflight to FAIL."""
     # Copy essential structure to tmp_path
@@ -74,7 +71,9 @@ def test_invalid_manifest_produces_fail(tmp_path):
 
     res = run_preflight_checks(repo_root=tmp_path)
     assert res["fail_count"] > 0
-    assert any(c["status"] == "FAIL" and "Manifest (deployment.yaml)" in c["name"] for c in res["checks"])
+    assert any(
+        c["status"] == "FAIL" and "Manifest (deployment.yaml)" in c["name"] for c in res["checks"]
+    )
 
 
 def test_corrupt_yaml_manifest_produces_fail(tmp_path):
@@ -127,6 +126,7 @@ def test_missing_ci_workflow_produces_fail(tmp_path):
 # ==============================================================================
 # 3. Security, Probes & Image Checks
 # ==============================================================================
+
 
 def test_secret_hygiene_scanner_passes():
     """Verifies that current repository has clean secret hygiene with no tracked private keys."""

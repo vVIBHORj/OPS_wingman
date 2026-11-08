@@ -5,10 +5,9 @@ Durable, thread-safe persistence for workflow runs and execution steps.
 
 import os
 import threading
-from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
 from datetime import datetime, timezone
-
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 from backend.workflows.state import WorkflowRunRecord, WorkflowState, WorkflowStepRecord
 
@@ -142,4 +141,3 @@ class WorkflowCheckpointStore:
 
 # Default singleton instance with durable persistence
 checkpoint_store = WorkflowCheckpointStore()
-

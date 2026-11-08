@@ -4,8 +4,9 @@ Exposes endpoints for document ingestion, retrieval, and document management.
 """
 
 from typing import List, Optional
-from uuid import UUID
 
+from database.models.enums import DocumentStatus, DocumentType
+from database.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -16,8 +17,6 @@ from backend.rag.schemas import (
     RetrievalResponse,
 )
 from backend.rag.service import RAGService
-from database.models.enums import DocumentStatus, DocumentType
-from database.session import get_db
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge & RAG"])
 

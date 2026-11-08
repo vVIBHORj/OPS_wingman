@@ -14,26 +14,29 @@ import hashlib
 import inspect
 import json
 import time
-from typing import Any, Callable, Dict, List, Optional, Sequence, Type
+from typing import Any, Callable, Dict, List, Optional, Type
+
 from pydantic import BaseModel
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
-from database.models.enums import IdempotencyStatus
 from backend.resilience.idempotency import (
-    IdempotencyService,
     IdempotencyRequestHashMismatchError,
+    IdempotencyService,
+)
+from backend.resilience.idempotency import (
     idempotency_service as default_idempotency_service,
 )
 from backend.resilience.retry import (
-    RetryExecutor,
     MaxRetriesExceededError,
+    RetryExecutor,
     TimeoutBudgetExceededError,
-    is_transient_error,
+)
+from backend.resilience.retry import (
     retry_executor as default_retry_executor,
 )
 from backend.resilience.schemas import RetryPolicyConfig
-from backend.tools.base import RiskLevel, ToolDefinition, ToolExecutionResult, ToolType
-from sqlalchemy.exc import DBAPIError, OperationalError
+from backend.tools.base import ToolDefinition, ToolExecutionResult, ToolType
 
 # Default transient exceptions for tools (infrastructure network + database transient errors)
 DEFAULT_TOOL_TRANSIENT_EXCEPTIONS: tuple[Type[BaseException], ...] = (
@@ -52,6 +55,7 @@ DEFAULT_TOOL_TRANSIENT_EXCEPTIONS: tuple[Type[BaseException], ...] = (
 # Idempotency Key & Scope Helpers
 # ==============================================================================
 
+
 def resolve_idempotency_key(
     tool: ToolDefinition,
     params: Dict[str, Any],
@@ -62,11 +66,13 @@ def resolve_idempotency_key(
     Precedence:
     1. Explicit key in `context["idempotency_key"]` or `params.get("idempotency_key")`.
     2. Composed key: `wf:{logical_id}:{tool.name}:{target_entity}` where:
-       - `logical_id`: `context.get("workflow_id")` or `context.get("run_id")` or `context.get("action_id")`.
+       - `logical_id`: `context.get("workflow_id")` or `context.get("run_id")`
+         or `context.get("action_id")`.
        - `target_entity`:
          - for order tools: `params.get("order_id")` or `params.get("order_number")`
          - for refund tools: `params.get("order_id")` or `params.get("payment_id")`
-         - for ticket tools: `params.get("order_id")` or `params.get("customer_id")` or `params.get("ticket_number")`
+         - for ticket tools: `params.get("order_id")` or `params.get("customer_id")`
+           or `params.get("ticket_number")`
          - fallback: canonical param fingerprint.
        - If no workflow/run context is provided:
          `tool:{tool.name}:{target_entity}`
@@ -95,11 +101,7 @@ def resolve_idempotency_key(
     else:
         target_entity = str(target_entity)
 
-    logical_id = (
-        ctx.get("run_id")
-        or ctx.get("workflow_id")
-        or ctx.get("action_id")
-    )
+    logical_id = ctx.get("run_id") or ctx.get("workflow_id") or ctx.get("action_id")
 
     if logical_id:
         return f"wf:{logical_id}:{tool.name}:{target_entity}"
@@ -135,7 +137,8 @@ def _invoke_tool_handler(
     validated_inputs: BaseModel,
     context: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    """Invokes handler with validated inputs and optional context, supporting both model and keyword signatures."""
+    """Invokes handler with validated inputs and optional context, supporting both model
+    and keyword signatures."""
     sig = None
     try:
         sig = inspect.signature(handler)
@@ -177,6 +180,7 @@ def _invoke_tool_handler(
 # ==============================================================================
 # Resilient Tool Executor
 # ==============================================================================
+
 
 class ResilientToolExecutor:
     """Composes IdempotencyService and RetryExecutor for resilient tool execution."""
@@ -286,7 +290,11 @@ class ResilientToolExecutor:
 
         # Step 3b: If already cached (COMPLETED), replay without calling mutation handler
         if acq.is_cached:
-            data = acq.cached_response if isinstance(acq.cached_response, dict) else {"result": acq.cached_response}
+            data = (
+                acq.cached_response
+                if isinstance(acq.cached_response, dict)
+                else {"result": acq.cached_response}
+            )
             return ToolExecutionResult(
                 success=True,
                 data=data,
@@ -606,7 +614,8 @@ class ResilientToolExecutor:
         sleeper: Any,
         time_fn: Any,
     ) -> ToolExecutionResult:
-        """Executes a tool with retry but without durable idempotency persistence when db session is absent."""
+        """Executes a tool with retry but without durable idempotency persistence
+        when db session is absent."""
         attempt_count = 0
         retry_delays: List[float] = []
         clock = time.monotonic if time_fn is None else time_fn

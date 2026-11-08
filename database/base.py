@@ -4,10 +4,11 @@ SQLAlchemy 2.0 Base and Common Model Mixins for OpsWingman.
 
 import uuid
 from datetime import datetime, timezone
+
 from sqlalchemy import DateTime, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy.types import CHAR, TypeDecorator
 
 
 class GUID(TypeDecorator):
@@ -15,6 +16,7 @@ class GUID(TypeDecorator):
     Platform-independent GUID type.
     Uses PostgreSQL's native UUID type, otherwise uses CHAR(36) for SQLite / other engines.
     """
+
     impl = CHAR
     cache_ok = True
 
@@ -42,11 +44,13 @@ class GUID(TypeDecorator):
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy declarative models."""
+
     pass
 
 
 class UUIDPrimaryKeyMixin:
     """Mixin that provides a standardized UUID primary key."""
+
     id: Mapped[uuid.UUID] = mapped_column(
         GUID,
         primary_key=True,
@@ -58,6 +62,7 @@ class UUIDPrimaryKeyMixin:
 
 class TimestampMixin:
     """Mixin that provides UTC created_at and updated_at timestamps."""
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

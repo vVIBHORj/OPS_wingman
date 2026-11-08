@@ -4,26 +4,27 @@ Records domain events synchronously within the active transaction.
 """
 
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
-from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database.models import (
-    Order,
-    Payment,
-    OrderStatus,
-    PaymentStatus,
-    PaymentMethod,
     EventType,
-)
-from simulator.exceptions import (
-    EntityNotFoundError,
-    InvalidStateTransitionError,
-    BusinessRuleViolationError,
+    Order,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+    PaymentStatus,
 )
 from simulator.events import record_event
+from simulator.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    InvalidStateTransitionError,
+)
 
 PAYMENT_TRANSITIONS = {
     PaymentStatus.INITIATED: {
@@ -39,7 +40,7 @@ PAYMENT_TRANSITIONS = {
     PaymentStatus.SUCCESSFUL: {
         PaymentStatus.REFUNDED,
     },
-    PaymentStatus.FAILED: set(),    # Terminal state for this attempt
+    PaymentStatus.FAILED: set(),  # Terminal state for this attempt
     PaymentStatus.REFUNDED: set(),  # Terminal state
 }
 
@@ -62,13 +63,19 @@ def create_payment(
         raise EntityNotFoundError(f"Order {order_id} not found.")
 
     if order.status == OrderStatus.CANCELLED:
-        raise BusinessRuleViolationError(f"Cannot create payment for cancelled order {order.order_number}.")
+        raise BusinessRuleViolationError(
+            f"Cannot create payment for cancelled order {order.order_number}."
+        )
 
     pay_amount = amount if amount is not None else order.total_amount
     if pay_amount <= Decimal("0.00"):
         raise BusinessRuleViolationError("Payment amount must be greater than zero.")
 
-    ref = payment_reference or f"PAY-{payment_method.value}-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    now_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    ref = (
+        payment_reference
+        or f"PAY-{payment_method.value}-{now_str}-{uuid.uuid4().hex[:6].upper()}"
+    )
 
     payment = Payment(
         id=payment_id or uuid.uuid4(),
@@ -112,7 +119,9 @@ def get_payment(
     if payment_id:
         payment = session.get(Payment, payment_id)
     elif payment_reference:
-        payment = session.scalar(select(Payment).where(Payment.payment_reference == payment_reference))
+        payment = session.scalar(
+            select(Payment).where(Payment.payment_reference == payment_reference)
+        )
     else:
         raise ValueError("Must provide either payment_id or payment_reference.")
 
@@ -188,8 +197,6 @@ def capture_payment(
         },
         correlation_id=correlation_id,
     )
-
-
 
     session.commit()
     session.refresh(payment)
@@ -290,4 +297,3 @@ def refund_payment(
     session.commit()
     session.refresh(payment)
     return payment
-

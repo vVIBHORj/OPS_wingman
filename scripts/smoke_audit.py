@@ -1,19 +1,17 @@
-import os
 import sys
+import uuid
+from decimal import Decimal
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import uuid
-from decimal import Decimal
-
-from database.session import SessionLocal
-from database.models import Customer, Order, Product
-from database.models.enums import OrderStatus
-from backend.agents.ops_agent import OpsAgent
-from backend.audit import audit_service
+from backend.agents.ops_agent import OpsAgent  # noqa: E402
+from backend.audit import audit_service  # noqa: E402
+from database.models import Customer, Order  # noqa: E402
+from database.models.enums import OrderStatus  # noqa: E402
+from database.session import SessionLocal  # noqa: E402
 
 
 def run_smoke_test():
@@ -68,7 +66,7 @@ def run_smoke_test():
 
         # If approval required, simulate supervisor approval resume
         if run_record.state.value == "WAITING_FOR_APPROVAL":
-            print(f"[SMOKE] Workflow paused for approval. Resuming with approval...")
+            print("[SMOKE] Workflow paused for approval. Resuming with approval...")
             resumed_record = agent.resume(
                 run_id=run_id,
                 approved=True,
@@ -86,7 +84,7 @@ def run_smoke_test():
 
         all_correlated = True
         for i, ev in enumerate(timeline.events, 1):
-            is_match = (ev.run_id == run_id)
+            is_match = ev.run_id == run_id
             if not is_match:
                 all_correlated = False
             print(
@@ -97,11 +95,24 @@ def run_smoke_test():
                 f"RunID: {ev.run_id}"
             )
             if ev.risk_assessment_summary:
-                print(f"    -> ML Risk Provenance: model={ev.risk_assessment_summary.get('model_name')} v{ev.risk_assessment_summary.get('model_version')}, score={ev.risk_assessment_summary.get('risk_score')}, band={ev.risk_assessment_summary.get('risk_band')}")
+                ras = ev.risk_assessment_summary
+                print(
+                    f"    -> ML Risk Provenance: model={ras.get('model_name')} "
+                    f"v{ras.get('model_version')}, score={ras.get('risk_score')}, "
+                    f"band={ras.get('risk_band')}"
+                )
             if ev.policy_decision:
-                print(f"    -> Policy Decision: policy_id={ev.policy_decision.get('policy_id')}, decision={ev.policy_decision.get('decision')}, allowed={ev.policy_decision.get('allowed')}")
+                pd = ev.policy_decision
+                print(
+                    f"    -> Policy Decision: policy_id={pd.get('policy_id')}, "
+                    f"decision={pd.get('decision')}, allowed={pd.get('allowed')}"
+                )
             if ev.verification_status:
-                print(f"    -> Verification: status={ev.verification_status}, target={ev.metadata_provenance.get('target_state')}, actual={ev.metadata_provenance.get('actual_state')}")
+                mp = ev.metadata_provenance or {}
+                print(
+                    f"    -> Verification: status={ev.verification_status}, "
+                    f"target={mp.get('target_state')}, actual={mp.get('actual_state')}"
+                )
 
         print("=" * 80)
         print(f"All {timeline.total_events} events correlated by run_id: {all_correlated}")

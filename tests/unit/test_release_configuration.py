@@ -16,10 +16,10 @@ Verifies:
 - CLI operational commands (version, validate-release) work
 """
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from typing import Any, Dict
-import pytest
+
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -39,6 +39,7 @@ def load_workflow() -> Dict[str, Any]:
 # ==============================================================================
 # 1. Workflow Structure & Triggers
 # ==============================================================================
+
 
 def test_release_workflow_exists_and_parses():
     """Verifies that release workflow exists and is syntactically valid YAML."""
@@ -77,13 +78,16 @@ def test_no_literal_secrets_in_workflow():
     ]
     for pattern in forbidden_patterns:
         # Exclude references to GitHub secrets like secrets.REGISTRY_PASSWORD
-        matches = [line for line in content.splitlines() if pattern in line and "secrets." not in line]
+        matches = [
+            line for line in content.splitlines() if pattern in line and "secrets." not in line
+        ]
         assert not matches, f"Found potentially hardcoded secret pattern '{pattern}': {matches}"
 
 
 # ==============================================================================
 # 2. Jobs, Environment & Security Verification
 # ==============================================================================
+
 
 def test_workflow_jobs_and_environment():
     """Verifies job hierarchy and production environment protection."""
@@ -131,6 +135,7 @@ def test_rollout_status_enforced():
 # 3. Kustomize Dynamic Image Override Verification
 # ==============================================================================
 
+
 def test_kustomize_image_override_functional():
     """Verifies that modifying images in kustomization.yaml updates rendered manifests."""
     kust_file = K8S_DIR / "kustomization.yaml"
@@ -164,6 +169,7 @@ def test_kustomize_image_override_functional():
 # ==============================================================================
 # 4. Operational CLI Commands (version & validate-release)
 # ==============================================================================
+
 
 def test_cli_version_command():
     """Tests python scripts/ops.py version execution."""

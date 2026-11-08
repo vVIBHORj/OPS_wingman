@@ -5,11 +5,12 @@ Demonstrates deterministic state transitions for orders, payments, and shipments
 
 import uuid
 from decimal import Decimal
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database.base import Base
-from database.models import Customer, Product, OrderStatus, PaymentStatus, ShipmentStatus
+from database.models import Customer, Product
 from simulator.service import BusinessSimulator
 
 
@@ -59,9 +60,18 @@ def run_demo():
         carrier="Delhivery",
     )
     print(f"  [+] Order Placed:    Number={order.order_number}, Total=INR {order.total_amount}")
-    print(f"  [+] Payment Captured: Ref={payment.payment_reference}, Status={payment.status.value}, PaidAt={payment.paid_at}")
-    print(f"  [+] Shipment Dispatched: Carrier={shipment.carrier}, Tracking={shipment.tracking_number}")
-    print(f"  [+] Shipment Delivered: Status={shipment.status.value}, DeliveredAt={shipment.actual_delivery_date}")
+    print(
+        f"  [+] Payment Captured: Ref={payment.payment_reference}, "
+        f"Status={payment.status.value}, PaidAt={payment.paid_at}"
+    )
+    print(
+        f"  [+] Shipment Dispatched: Carrier={shipment.carrier}, "
+        f"Tracking={shipment.tracking_number}"
+    )
+    print(
+        f"  [+] Shipment Delivered: Status={shipment.status.value}, "
+        f"DeliveredAt={shipment.actual_delivery_date}"
+    )
     print(f"  [+] Final Order Status: {order.status.value}")
 
     # 3. Scenario: Delayed Order Flow

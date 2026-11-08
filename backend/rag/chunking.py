@@ -1,7 +1,7 @@
 """Deterministic Document Chunking Utilities (Phase 3 - Deliverable D-10)."""
 
 import re
-from typing import Any, Dict, List
+from typing import Any, List
 
 
 class DocumentChunkDict(dict):
@@ -55,7 +55,10 @@ def chunk_document(
                 DocumentChunkDict(
                     chunk_text=current_chunk.strip(),
                     chunk_index=chunk_index,
-                    metadata={"section_header": current_header, "char_length": len(current_chunk.strip())},
+                    metadata={
+                        "section_header": current_header,
+                        "char_length": len(current_chunk.strip()),
+                    },
                 )
             )
             chunk_index += 1
@@ -73,7 +76,10 @@ def chunk_document(
             DocumentChunkDict(
                 chunk_text=current_chunk.strip(),
                 chunk_index=chunk_index,
-                metadata={"section_header": current_header, "char_length": len(current_chunk.strip())},
+                metadata={
+                    "section_header": current_header,
+                    "char_length": len(current_chunk.strip()),
+                },
             )
         )
 

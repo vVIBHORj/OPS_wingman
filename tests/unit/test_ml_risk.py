@@ -1,23 +1,29 @@
 """Unit tests for Standalone Risk / ML Subsystem (Phase 4 - Deliverable D-13)."""
 
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal
 import uuid
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from database.models import Customer, Order, OrderItem, OrderStatus, Payment, PaymentStatus, Product, Shipment, ShipmentStatus
+import database.models  # noqa: F401
+from backend.ml.features import FeatureExtractor
+from backend.ml.model import OperationalRiskModel
 from backend.ml.schemas import (
     RiskBand,
     RiskFeatureVector,
-    ModelMetadata,
-    RiskAssessmentResult,
 )
-from backend.ml.features import FeatureExtractor
-from backend.ml.model import OperationalRiskModel
 from backend.ml.service import MLRiskService
+from database.models import (
+    Customer,
+    Order,
+    OrderItem,
+    OrderStatus,
+    Product,
+)
 
 
 @pytest.fixture
@@ -43,7 +49,9 @@ def test_model_version_and_metadata(model: OperationalRiskModel, service: MLRisk
 
 
 def test_low_risk_assessment(model: OperationalRiskModel):
-    """1. Verifies a mature account with a low-value order and no refund/delay history produces LOW risk."""
+    """1. Verifies a mature account with a low-value order and no refund/delay history
+    produces LOW risk.
+    """
     features = RiskFeatureVector(
         order_amount=800.0,
         account_age_days=180.0,  # Mature account >60 days -> 0 penalty
@@ -84,7 +92,9 @@ def test_medium_risk_assessment(model: OperationalRiskModel):
 
 
 def test_high_risk_assessment(model: OperationalRiskModel):
-    """3. Verifies high order value, extensive refund history, and payment failures produce HIGH risk."""
+    """3. Verifies high order value, extensive refund history, and payment failures
+    produce HIGH risk.
+    """
     features = RiskFeatureVector(
         order_amount=18000.0,
         account_age_days=5.0,
@@ -105,7 +115,9 @@ def test_high_risk_assessment(model: OperationalRiskModel):
 
 
 def test_exact_threshold_behavior(model: OperationalRiskModel):
-    """4. Verifies decision boundaries: < 0.35 is LOW, 0.35 <= score < 0.70 is MEDIUM, >= 0.70 is HIGH."""
+    """4. Verifies decision boundaries: < 0.35 is LOW, 0.35 <= score < 0.70 is MEDIUM,
+    >= 0.70 is HIGH.
+    """
     # Low boundary check
     low_feat = RiskFeatureVector(order_amount=500.0, account_age_days=200.0)
     res_low = model.score(low_feat)
@@ -143,7 +155,9 @@ def test_deterministic_scoring(model: OperationalRiskModel):
     assert score_1.risk_score == score_2.risk_score
     assert score_1.risk_band == score_2.risk_band
     assert len(score_1.contributions) == len(score_2.contributions)
-    assert score_1.contributions[0].contribution_score == score_2.contributions[0].contribution_score
+    assert (
+        score_1.contributions[0].contribution_score == score_2.contributions[0].contribution_score
+    )
 
 
 def test_feature_extraction_from_entities():
@@ -188,7 +202,9 @@ def test_feature_validation_constraints():
 
 
 def test_explanation_and_contribution_generation(model: OperationalRiskModel):
-    """9. Verifies feature contributions are computed, sorted, and contain human-readable explanations."""
+    """9. Verifies feature contributions are computed, sorted, and contain
+    human-readable explanations.
+    """
     features = RiskFeatureVector(
         order_amount=12000.0,
         account_age_days=10.0,
@@ -201,7 +217,10 @@ def test_explanation_and_contribution_generation(model: OperationalRiskModel):
     assert len(result.contributions) == 5
     # Verify contributions are sorted in descending order of impact
     for i in range(len(result.contributions) - 1):
-        assert result.contributions[i].contribution_score >= result.contributions[i + 1].contribution_score
+        assert (
+            result.contributions[i].contribution_score
+            >= result.contributions[i + 1].contribution_score
+        )
 
     # Check that descriptions are populated
     for contrib in result.contributions:
@@ -308,11 +327,12 @@ def test_risk_band_mapping_exhaustive(model: OperationalRiskModel):
 
     # Score >= 0.70 -> HIGH
     high_res = model.score(
-        RiskFeatureVector(order_amount=20000.0, account_age_days=2.0, refund_count=3, refund_ratio=0.75)
+        RiskFeatureVector(
+            order_amount=20000.0, account_age_days=2.0, refund_count=3, refund_ratio=0.75
+        )
     )
     assert high_res.risk_band == RiskBand.HIGH
     assert high_res.is_high_risk is True
-
 
 
 def test_service_level_db_assessment(db_session: Session, service: MLRiskService):

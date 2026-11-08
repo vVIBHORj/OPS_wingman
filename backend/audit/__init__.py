@@ -3,20 +3,21 @@ Audit and Observability Subsystem for OpsWingman (Phase 4/5 - Deliverable D-16).
 Provides structured auditing, observability dispatch, timeline compilation, and provenance tracking.
 """
 
-from database.models.enums import AuditEventType
 from database.models.audit import AuditEventRecord
+from database.models.enums import AuditEventType
+
+from backend.audit.observability import (
+    BaseObservabilitySink,
+    ObservabilityManager,
+    PluggableObservabilitySink,
+    StructuredLoggingSink,
+    default_observability_manager,
+)
 from backend.audit.schemas import (
     AuditEventCreate,
     AuditEventResponse,
     AuditTimelineResponse,
     sanitize_audit_data,
-)
-from backend.audit.observability import (
-    BaseObservabilitySink,
-    StructuredLoggingSink,
-    PluggableObservabilitySink,
-    ObservabilityManager,
-    default_observability_manager,
 )
 from backend.audit.service import AuditService, audit_service
 

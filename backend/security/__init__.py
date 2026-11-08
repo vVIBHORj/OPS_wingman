@@ -1,1 +1,1 @@
-﻿# Package marker for backend/security
+# Package marker for backend/security

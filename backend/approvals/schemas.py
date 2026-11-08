@@ -3,13 +3,14 @@
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
 
 from database.models.enums import ApprovalStatus
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ApprovalResponse(BaseModel):
     """Standardized response schema representing a human approval record."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -57,12 +58,19 @@ class ApprovalResponse(BaseModel):
 
 class ApprovalActionRequest(BaseModel):
     """Payload to grant approval for a pending operational action."""
-    approver_id: Optional[str] = Field(default="ops_supervisor_1", description="Identifier of approving manager")
+
+    approver_id: Optional[str] = Field(
+        default="ops_supervisor_1", description="Identifier of approving manager"
+    )
     approver_identity: Optional[str] = Field(default=None, description="Alias for approver_id")
-    comment: Optional[str] = Field(default=None, description="Optional approval remark or reference")
+    comment: Optional[str] = Field(
+        default=None, description="Optional approval remark or reference"
+    )
 
     def __init__(self, **data: Any) -> None:
-        if "approver_identity" in data and ("approver_id" not in data or data["approver_id"] == "ops_supervisor_1"):
+        if "approver_identity" in data and (
+            "approver_id" not in data or data["approver_id"] == "ops_supervisor_1"
+        ):
             data["approver_id"] = data["approver_identity"]
         elif "approver_id" in data and "approver_identity" not in data:
             data["approver_identity"] = data["approver_id"]
@@ -71,9 +79,14 @@ class ApprovalActionRequest(BaseModel):
 
 class RejectionActionRequest(BaseModel):
     """Payload to deny approval for a pending operational action."""
-    reason: Optional[str] = Field(default=None, description="Mandatory justification for denying approval")
+
+    reason: Optional[str] = Field(
+        default=None, description="Mandatory justification for denying approval"
+    )
     rejection_reason: Optional[str] = Field(default=None, description="Alias for reason")
-    approver_id: Optional[str] = Field(default="ops_supervisor_1", description="Identifier of rejecting manager")
+    approver_id: Optional[str] = Field(
+        default="ops_supervisor_1", description="Identifier of rejecting manager"
+    )
     approver_identity: Optional[str] = Field(default=None, description="Alias for approver_id")
 
     def __init__(self, **data: Any) -> None:
@@ -81,7 +94,9 @@ class RejectionActionRequest(BaseModel):
             data["reason"] = data["rejection_reason"]
         elif "reason" in data and not data.get("rejection_reason"):
             data["rejection_reason"] = data["reason"]
-        if "approver_identity" in data and ("approver_id" not in data or data["approver_id"] == "ops_supervisor_1"):
+        if "approver_identity" in data and (
+            "approver_id" not in data or data["approver_id"] == "ops_supervisor_1"
+        ):
             data["approver_id"] = data["approver_identity"]
         elif "approver_id" in data and "approver_identity" not in data:
             data["approver_identity"] = data["approver_id"]

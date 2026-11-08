@@ -9,18 +9,19 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from database.models.audit import AuditEventRecord
 from database.models.enums import AuditEventType
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.audit.observability import ObservabilityManager, default_observability_manager
 from backend.audit.schemas import (
     AuditEventCreate,
     AuditEventResponse,
     AuditTimelineResponse,
     sanitize_audit_data,
 )
-from backend.audit.observability import ObservabilityManager, default_observability_manager
 
 
 class AuditService:
@@ -63,7 +64,9 @@ class AuditService:
             event_id=event_id,
             run_id=event.run_id,
             timestamp=now,
-            event_type=event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type),
+            event_type=event.event_type.value
+            if hasattr(event.event_type, "value")
+            else str(event.event_type),
             actor=event.actor,
             workflow_state=event.workflow_state,
             entity_type=event.entity_type,
@@ -130,12 +133,15 @@ class AuditService:
         resilience_metadata: Optional[Dict[str, Any]] = None,
         session: Optional[Session] = None,
     ) -> AuditEventRecord:
-        """Records an operational tool execution with its arguments, result, and resilience telemetry."""
+        """Records an operational tool execution with its arguments, result, and resilience
+        telemetry."""
         res_meta = resilience_metadata or {}
         event_type = AuditEventType.TOOL_EXECUTED if success else AuditEventType.TOOL_FAILED
 
         # Check if an idempotency hit occurred
-        is_cached = bool(res_meta.get("is_cached") is True or res_meta.get("final_status") == "CACHED")
+        is_cached = bool(
+            res_meta.get("is_cached") is True or res_meta.get("final_status") == "CACHED"
+        )
         if is_cached:
             # Emit dedicated idempotency audit event first
             self.record_event(
@@ -477,12 +483,14 @@ class AuditService:
                     "success": ev.success,
                 }
             if ev.event_type in (AuditEventType.RETRY_ATTEMPTED, AuditEventType.IDEMPOTENCY_HIT):
-                resilience_interventions.append({
-                    "event_type": ev.event_type.value,
-                    "tool_name": ev.tool_name,
-                    "idempotency_info": ev.idempotency_info,
-                    "retry_attempt": ev.retry_attempt,
-                })
+                resilience_interventions.append(
+                    {
+                        "event_type": ev.event_type.value,
+                        "tool_name": ev.tool_name,
+                        "idempotency_info": ev.idempotency_info,
+                        "retry_attempt": ev.retry_attempt,
+                    }
+                )
 
         return AuditTimelineResponse(
             run_id=run_id,

@@ -11,14 +11,13 @@ from datetime import datetime, timezone
 from typing import Any, Sequence
 from uuid import UUID
 
+from database.models.approval import ApprovalRecord
+from database.models.enums import ApprovalStatus
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.approvals.schemas import ApprovalResponse
 from backend.policies.schemas import PolicyEvaluationResult
 from backend.tools.schemas import StructuredAction
-from database.models.approval import ApprovalRecord
-from database.models.enums import ApprovalStatus
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +128,10 @@ class ApprovalService:
             return (
                 record,
                 False,
-                f"Cannot approve request in '{record.status.value}' state. Only PENDING requests can be approved.",
+                (
+                    f"Cannot approve request in '{record.status.value}' state. "
+                    "Only PENDING requests can be approved."
+                ),
             )
 
         now = datetime.now(timezone.utc)
@@ -168,7 +170,10 @@ class ApprovalService:
             return (
                 record,
                 False,
-                f"Cannot reject request in '{record.status.value}' state. Only PENDING requests can be rejected.",
+                (
+                    f"Cannot reject request in '{record.status.value}' state. "
+                    "Only PENDING requests can be rejected."
+                ),
             )
 
         if not rejection_reason or not rejection_reason.strip():

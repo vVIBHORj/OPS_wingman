@@ -7,6 +7,7 @@ post-action verification, operational summary, error handling, and read-only inv
 import uuid
 from datetime import datetime, timezone
 from typing import Generator
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -340,7 +341,10 @@ def test_retry_exhaustion_telemetry(client: TestClient):
     assert telem["failure_information"] is not None
     assert telem["failure_information"]["retry_exhausted"] is True
     assert len(telem["failure_information"]["resilience_failures"]) == 1
-    assert telem["failure_information"]["resilience_failures"][0]["error_type"] == "MaxRetriesExceededError"
+    assert (
+        telem["failure_information"]["resilience_failures"][0]["error_type"]
+        == "MaxRetriesExceededError"
+    )
 
 
 def test_timeout_telemetry(client: TestClient):
@@ -578,10 +582,10 @@ def test_operational_summary_aggregation(client: TestClient):
 
     assert summary["total_runs"] == 7
     assert summary["completed"] == 3  # r1, r6, r7
-    assert summary["failed"] == 2     # r2, r3
+    assert summary["failed"] == 2  # r2, r3
     assert summary["waiting_for_approval"] == 1  # r4
     assert summary["cancelled"] == 1  # r5
-    assert summary["retry_failures"] == 1    # r2
+    assert summary["retry_failures"] == 1  # r2
     assert summary["timeout_failures"] == 1  # r3
     assert summary["high_risk_assessments"] == 1  # r6
     assert summary["anomalous_assessments"] == 1  # r6

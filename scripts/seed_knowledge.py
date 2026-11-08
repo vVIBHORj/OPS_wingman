@@ -13,8 +13,8 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from backend.rag.seed_knowledge import seed_default_knowledge
-from database.session import SessionLocal
+from backend.rag.seed_knowledge import seed_default_knowledge  # noqa: E402
+from database.session import SessionLocal  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)

@@ -21,10 +21,9 @@ Covers:
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, List
-import pytest
+
 from fastapi.testclient import TestClient
 
-import simulator
 from backend.agents.ops_agent import OpsAgent
 from backend.audit import (
     AuditEventCreate,
@@ -33,20 +32,18 @@ from backend.audit import (
     AuditService,
     ObservabilityManager,
     PluggableObservabilitySink,
-    StructuredLoggingSink,
     audit_service,
-    observability_manager,
     sanitize_audit_data,
 )
 from backend.main import app
 from backend.workflows.state import WorkflowState
-from database.models import Customer, Order, OrderItem, Payment, Product
-from database.models.enums import OrderStatus, PaymentStatus
-
+from database.models import Customer, Order, Product
+from database.models.enums import OrderStatus
 
 # ==============================================================================
 # 1. Model Validation & Sanitization Tests
 # ==============================================================================
+
 
 def test_audit_event_creation_and_defaults():
     """Verifies AuditEventCreate instantiation, defaults, and type correctness."""
@@ -100,6 +97,7 @@ def test_sensitive_field_sanitization():
 # ==============================================================================
 # 2. Persistence & Buffer Tests
 # ==============================================================================
+
 
 def test_event_persistence_in_db(db_session):
     """Verifies that audit events are durably persisted to the database."""
@@ -156,8 +154,10 @@ def test_audit_service_in_memory_buffer():
 # 3. Observability Sinks & Manager Tests
 # ==============================================================================
 
+
 class MockObservabilitySink(PluggableObservabilitySink):
     """Test spy sink tracking emitted audit events."""
+
     def __init__(self):
         super().__init__()
         self.emitted_events: List[Dict[str, Any]] = []
@@ -170,13 +170,15 @@ class MockObservabilitySink(PluggableObservabilitySink):
         actor: str,
         data: Dict[str, Any],
     ) -> None:
-        self.emitted_events.append({
-            "event_id": event_id,
-            "run_id": run_id,
-            "event_type": event_type.value if hasattr(event_type, "value") else str(event_type),
-            "actor": actor,
-            "data": data,
-        })
+        self.emitted_events.append(
+            {
+                "event_id": event_id,
+                "run_id": run_id,
+                "event_type": event_type.value if hasattr(event_type, "value") else str(event_type),
+                "actor": actor,
+                "data": data,
+            }
+        )
 
 
 def test_observability_manager_fanout():
@@ -206,13 +208,14 @@ def test_observability_manager_fanout():
 # 4. Resilience & Idempotency Provenance Tests
 # ==============================================================================
 
+
 def test_record_tool_execution_with_resilience_and_idempotency(db_session):
     """Verifies that retry attempts and idempotency cache hits generate distinct audit entries."""
     service = AuditService()
     run_id = str(uuid.uuid4())
 
     # Case 1: Execution with retries and timeout metadata
-    res_record = service.record_tool_execution(
+    service.record_tool_execution(
         run_id=run_id,
         tool_name="cancel_order",
         arguments={"order_id": "ord-123", "password": "redact_me"},
@@ -266,6 +269,7 @@ def test_record_tool_execution_with_resilience_and_idempotency(db_session):
 # ==============================================================================
 # 5. Policy, ML Risk & Verification Provenance Tests
 # ==============================================================================
+
 
 def test_record_policy_decision(db_session):
     """Verifies deterministic policy decision audit captures rule ID and allowed status."""
@@ -355,12 +359,16 @@ def test_record_verification_provenance(db_session):
     assert ev.success is False
     assert ev.metadata_provenance["target_state"] == "CANCELLED"
     assert ev.metadata_provenance["actual_state"] == "SHIPPED"
-    assert "Status mismatch: expected CANCELLED, actual SHIPPED" in ev.metadata_provenance["discrepancies"]
+    assert (
+        "Status mismatch: expected CANCELLED, actual SHIPPED"
+        in ev.metadata_provenance["discrepancies"]
+    )
 
 
 # ==============================================================================
 # 6. Approvals & Workflow Lifecycle Tests
 # ==============================================================================
+
 
 def test_record_approval_events(db_session):
     """Verifies human approval requested and resolution audit records."""
@@ -427,15 +435,27 @@ def test_record_workflow_completion_and_failure(db_session):
 # 7. Timeline Ordering & Immutability Tests
 # ==============================================================================
 
+
 def test_timeline_ordering(db_session):
     """Verifies timeline events are ordered chronologically and correlated by run_id."""
     service = AuditService()
     run_id = str(uuid.uuid4())
 
-    service.record_event(AuditEventCreate(run_id=run_id, event_type=AuditEventType.REQUEST_RECEIVED), session=db_session)
-    service.record_event(AuditEventCreate(run_id=run_id, event_type=AuditEventType.INTENT_INTERPRETED), session=db_session)
-    service.record_event(AuditEventCreate(run_id=run_id, event_type=AuditEventType.TOOL_PLANNED), session=db_session)
-    service.record_event(AuditEventCreate(run_id=run_id, event_type=AuditEventType.WORKFLOW_COMPLETED), session=db_session)
+    service.record_event(
+        AuditEventCreate(run_id=run_id, event_type=AuditEventType.REQUEST_RECEIVED),
+        session=db_session,
+    )
+    service.record_event(
+        AuditEventCreate(run_id=run_id, event_type=AuditEventType.INTENT_INTERPRETED),
+        session=db_session,
+    )
+    service.record_event(
+        AuditEventCreate(run_id=run_id, event_type=AuditEventType.TOOL_PLANNED), session=db_session
+    )
+    service.record_event(
+        AuditEventCreate(run_id=run_id, event_type=AuditEventType.WORKFLOW_COMPLETED),
+        session=db_session,
+    )
 
     timeline = service.get_timeline(run_id, session=db_session)
     assert timeline.run_id == run_id
@@ -495,8 +515,11 @@ def test_business_entity_immutability(db_session):
 # 8. REST API Endpoint Tests
 # ==============================================================================
 
+
 def test_audit_api_endpoints(db_session):
-    """Tests GET /audit/runs/{run_id}, GET /audit/events/{event_id}, and GET /audit/runs/{run_id}/timeline."""
+    """Tests GET /audit/runs/{run_id}, GET /audit/events/{event_id},
+    and GET /audit/runs/{run_id}/timeline.
+    """
     client = TestClient(app)
     run_id = str(uuid.uuid4())
 
@@ -545,6 +568,7 @@ def test_audit_api_endpoints(db_session):
 # ==============================================================================
 # 9. End-to-End Workflow Audit Integration Test
 # ==============================================================================
+
 
 def test_ops_agent_workflow_produces_correlated_audit_timeline(db_session):
     """Proves that a complete OpsAgent run produces a fully correlated audit timeline.
@@ -681,12 +705,18 @@ def test_ops_agent_approval_gated_workflow_audit_integration(db_session):
     assert AuditEventType.WORKFLOW_COMPLETED in final_types
 
     # Verify post-action verification audit provenance
-    ver_event = next(e for e in final_timeline.events if e.event_type == AuditEventType.VERIFICATION_COMPLETED)
+    ver_event = next(
+        e for e in final_timeline.events if e.event_type == AuditEventType.VERIFICATION_COMPLETED
+    )
     assert ver_event.verification_status == "VERIFIED"
     assert ver_event.success is True
 
     # Verify approval resolution details
-    approval_res_ev = next(e for e in final_timeline.events if e.event_type == AuditEventType.APPROVAL_RESOLVED)
+    approval_res_ev = next(
+        e for e in final_timeline.events if e.event_type == AuditEventType.APPROVAL_RESOLVED
+    )
     assert approval_res_ev.approval_status == "APPROVED"
-    assert approval_res_ev.metadata_provenance.get("reason") == "Verified customer requested cancellation directly."
-
+    assert (
+        approval_res_ev.metadata_provenance.get("reason")
+        == "Verified customer requested cancellation directly."
+    )

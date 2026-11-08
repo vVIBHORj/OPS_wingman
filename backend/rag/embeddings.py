@@ -1,7 +1,8 @@
-"""Replaceable Embedding Provider Interface and Deterministic Local Embeddings (Phase 3 - Deliverable D-10)."""
+"""Replaceable Embedding Provider Interface and Deterministic Local Embeddings
+(Phase 3 - Deliverable D-10)."""
 
-import math
 import hashlib
+import math
 import re
 from abc import ABC, abstractmethod
 from typing import List, Optional
@@ -48,7 +49,8 @@ class DeterministicLocalEmbeddingProvider(BaseEmbeddingProvider):
         return self._dim
 
     def embed_text(self, text: str) -> List[float]:
-        """Transforms text into a normalized dense vector using token hashing and sub-word n-grams."""
+        """Transforms text into a normalized dense vector using token hashing and
+        sub-word n-grams."""
         vec = [0.0] * self._dim
         cleaned = text.lower().strip()
         if not cleaned:
@@ -69,7 +71,7 @@ class DeterministicLocalEmbeddingProvider(BaseEmbeddingProvider):
             # 2. Sub-word character trigrams for morphological similarity
             if len(token) >= 3:
                 for j in range(len(token) - 2):
-                    trigram = token[j:j+3]
+                    trigram = token[j : j + 3]
                     th = int(hashlib.sha256(trigram.encode("utf-8")).hexdigest(), 16)
                     tidx = th % self._dim
                     tsign = 1.0 if ((th >> 3) & 1) == 0 else -1.0

@@ -5,11 +5,13 @@ Defines typed tool definitions, risk levels, tool types, and registry interfaces
 
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class RiskLevel(str, Enum):
     """Risk tier for tool execution and policy governance."""
+
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -17,6 +19,7 @@ class RiskLevel(str, Enum):
 
 class ToolType(str, Enum):
     """Classification of tool operation semantics."""
+
     READ = "READ"
     WRITE = "WRITE"
     SYSTEM = "SYSTEM"
@@ -24,19 +27,25 @@ class ToolType(str, Enum):
 
 class ToolDefinition(BaseModel):
     """Metadata and execution contract for an authorized tool."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str = Field(..., description="Unique tool identifier name")
     description: str = Field(..., description="Semantic purpose and usage description")
     tool_type: ToolType = Field(..., description="Operation type: READ, WRITE, or SYSTEM")
     risk_level: RiskLevel = Field(..., description="Risk tier: LOW, MEDIUM, or HIGH")
-    input_schema: Type[BaseModel] = Field(..., description="Pydantic schema validating input parameters")
-    output_schema: Optional[Type[BaseModel]] = Field(default=None, description="Pydantic schema for outputs")
+    input_schema: Type[BaseModel] = Field(
+        ..., description="Pydantic schema validating input parameters"
+    )
+    output_schema: Optional[Type[BaseModel]] = Field(
+        default=None, description="Pydantic schema for outputs"
+    )
     handler: Callable[..., Any] = Field(..., description="Deterministic execution callable")
 
 
 class ToolExecutionResult(BaseModel):
     """Standardized output container for any tool invocation."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     success: bool
@@ -70,6 +79,7 @@ class ToolRegistry:
             self.resilience_wrapper = resilience_wrapper
         else:
             from backend.resilience.wrapper import resilient_tool_executor
+
             self.resilience_wrapper = resilient_tool_executor
 
     def register(self, tool: ToolDefinition) -> None:
@@ -86,7 +96,9 @@ class ToolRegistry:
         """Returns all registered tool definitions."""
         return list(self._tools.values())
 
-    def execute(self, name: str, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> ToolExecutionResult:
+    def execute(
+        self, name: str, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None
+    ) -> ToolExecutionResult:
         """
         Validates parameters against the tool's input schema and executes the handler.
         Routes execution through ResilientToolExecutor for idempotency and retry protection.
@@ -102,11 +114,17 @@ class ToolRegistry:
 
         # 1. Enforce HIGH-risk tool authorization at the ToolRegistry execution boundary
         if tool.risk_level == RiskLevel.HIGH:
-            is_approved = bool(context and (context.get("approved") is True or context.get("approval_granted") is True))
+            is_approved = bool(
+                context
+                and (context.get("approved") is True or context.get("approval_granted") is True)
+            )
             if not is_approved:
                 return ToolExecutionResult(
                     success=False,
-                    error=f"Execution blocked: HIGH-risk tool '{name}' requires explicit approval authorization.",
+                    error=(
+                        f"Execution blocked: HIGH-risk tool '{name}' requires explicit "
+                        "approval authorization."
+                    ),
                     tool_name=name,
                     risk_level=tool.risk_level,
                 )
@@ -123,6 +141,7 @@ class ToolRegistry:
             )
 
         # 3. Route through resilience wrapper
-        resilience_exec = (context.get("resilience_wrapper") if context else None) or self.resilience_wrapper
+        resilience_exec = (
+            context.get("resilience_wrapper") if context else None
+        ) or self.resilience_wrapper
         return resilience_exec.execute(tool, validated_inputs, context=context)
-

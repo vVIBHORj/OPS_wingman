@@ -5,21 +5,22 @@ Reuses deterministic business simulator operations without duplicating rules.
 
 import uuid
 from typing import Optional
+
+import simulator
+from database.session import get_db
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from database.session import get_db
 from backend.api.schemas import (
-    OrderCreateRequest,
-    OrderStatusUpdateRequest,
     OrderCancelRequest,
+    OrderCreateRequest,
     OrderResponse,
+    OrderStatusUpdateRequest,
     PaymentCreateRequest,
     PaymentResponse,
     ShipmentCreateRequest,
     ShipmentResponse,
 )
-import simulator
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -97,7 +98,9 @@ def update_order_status(
     return OrderResponse.model_validate(order)
 
 
-@router.post("/{order_id}/payments", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{order_id}/payments", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED
+)
 def create_order_payment(
     order_id: uuid.UUID,
     payload: PaymentCreateRequest,
@@ -114,7 +117,9 @@ def create_order_payment(
     return PaymentResponse.model_validate(payment)
 
 
-@router.post("/{order_id}/shipments", response_model=ShipmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{order_id}/shipments", response_model=ShipmentResponse, status_code=status.HTTP_201_CREATED
+)
 def create_order_shipment(
     order_id: uuid.UUID,
     payload: ShipmentCreateRequest,
@@ -130,4 +135,3 @@ def create_order_shipment(
         status=payload.status,
     )
     return ShipmentResponse.model_validate(shipment)
-

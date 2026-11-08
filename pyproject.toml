@@ -62,6 +62,14 @@ python_files = ["test_*.py"]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "unit: Isolated unit tests for functions, schemas, models, and policy algorithms.",
+    "integration: Integration tests for API routers, database persistence, and service contracts.",
+    "resilience: Resilience tests for retries, backoff, timeout budgets, and idempotency.",
+    "security: Security tests for authentication, authorization boundaries, secret hardening, and data sanitization.",
+    "e2e: End-to-end tests for complete multi-step agent workflows and failure recovery.",
+    "external: Tests requiring external third-party services or live networks (skipped if unconfigured).",
+]
 
 [tool.ruff]
 line-length = 100

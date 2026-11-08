@@ -3,13 +3,14 @@ Customer API Router.
 """
 
 import uuid
+
+from database.models import Customer
+from database.session import get_db
 from fastapi import APIRouter, Depends
+from simulator.exceptions import EntityNotFoundError
 from sqlalchemy.orm import Session
 
-from database.session import get_db
-from database.models import Customer
 from backend.api.schemas import CustomerResponse
-from simulator.exceptions import EntityNotFoundError
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
@@ -24,4 +25,3 @@ def get_customer_by_id(
     if not customer:
         raise EntityNotFoundError(f"Customer {customer_id} not found.")
     return CustomerResponse.model_validate(customer)
-
