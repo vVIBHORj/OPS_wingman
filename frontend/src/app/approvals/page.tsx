@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
 interface Citation {
@@ -49,7 +49,7 @@ export default function ApprovalsPage() {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  const fetchApprovals = async () => {
+  const fetchApprovals = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -67,11 +67,11 @@ export default function ApprovalsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, statusFilter]);
 
   useEffect(() => {
     fetchApprovals();
-  }, [statusFilter]);
+  }, [fetchApprovals]);
 
   const handleApprove = async (id: string) => {
     try {
@@ -304,7 +304,7 @@ export default function ApprovalsPage() {
                             )}
                           </div>
                           <p className="mt-1 text-slate-300 text-[11px] line-clamp-2 italic">
-                            "{c.text}"
+                            &quot;{c.text}&quot;
                           </p>
                         </div>
                       ))}
