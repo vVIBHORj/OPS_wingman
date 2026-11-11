@@ -34,6 +34,7 @@ from backend.api.routers import (
     payments_router,
     products_router,
     shipments_router,
+    tickets_router,
 )
 from backend.config import get_settings
 
@@ -144,6 +145,7 @@ app.include_router(products_router)
 app.include_router(orders_router)
 app.include_router(payments_router)
 app.include_router(shipments_router)
+app.include_router(tickets_router)
 app.include_router(events_router)
 app.include_router(agent_router)
 app.include_router(knowledge_router)

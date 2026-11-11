@@ -1,695 +1,500 @@
-# OpsWingman
+# OpsWingman — Operations Control Center
 
-> **Intelligent Operations for Modern Businesses**  
-> A local-first, agentic operations platform designed to execute repeatable business workflows across email, orders, payments, logistics, knowledge, and internal systems — while keeping policy, permissions, verification, and auditability strictly outside the LLM.
+[![Python 3.12](https://img.shields.io/badge/Python-3.12+-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-336791.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Tests](https://img.shields.io/badge/Tests-359%20Passed-success.svg?logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
----
-
-## 🎯 Project Overview
-
-OpsWingman provides a reliable operations execution layer for customer and order workflows (initially targeting Indian SMB operations). Rather than acting as an unrestricted chatbot or conversational copilot, OpsWingman treats AI models as reasoning and drafting components governed by **deterministic application code**, **formal authorization boundaries**, and **human-in-the-loop review** for sensitive actions.
-
-### 🛡️ Core Architectural Principle
-> **The LLM must NOT control authorization, permissions, secrets, database truth, or final approval of sensitive actions.**  
-> All security policies, financial executions, state updates, and external API requests are validated and guarded by deterministic software boundaries.
-
----
-
-## 📊 Current Status: Phase 4 — ML Risk Scoring, Verification & Resilience
-
-The repository is currently at **Phase 4 (ML Risk Scoring)**.
-
-- [x] Monorepo directory structure established
-- [x] Docker & local development environment configured
-- [x] Baseline dependencies & packaging defined (FastAPI / Next.js)
-- [x] Foundation architecture documentation & coding conventions documented
-- [x] Unit test harness initialized
-- [x] *Phase 1: Operational API & Business Simulator (Next milestone)*
-- [x] *Phase 2: Workflow Engine, State & Tool Registry*
-- [x] *Phase 3: RAG, Policy Engine & Human Approval Queue*
-- [ ] *Phase 4: ML Risk Scoring, Verification & Resilience*
-- [ ] *Phase 5: Evaluation Harness, Benchmark Datasets & E2E Verification*
+> **Deterministic Runtime & Enterprise AI Operations Control Center for Modern Commerce**
+> A high-reliability operations execution platform for retail, e-commerce, and logistics. OpsWingman executes end-to-end customer workflows across orders, payments, fulfillment, and customer support — **keeping policy enforcement, risk scoring, financial authorization, state verification, and audit provenance strictly outside the LLM**.
 
 ---
 
-## 🏗️ Repository Structure
+## 🎯 Executive Overview
+
+OpsWingman transforms modern business operations by providing a reliable execution layer for customer and order workflows. Unlike chat-based assistants or opaque autonomous agents, OpsWingman treats AI models purely as drafting and reasoning components governed by **deterministic application code**, **formal authorization boundaries**, and **human-in-the-loop review** for sensitive actions.
 
 ```
-opswingman/
-├── frontend/                  # Next.js 14+ frontend with TypeScript & React Flow
-├── backend/                   # Python 3.12+ FastAPI backend service
-│   ├── api/                   # REST API routes & controllers
-│   ├── agents/                # LangGraph stateful agent definitions
-│   ├── workflows/             # Business workflow definitions & state transitions
-│   ├── tools/                 # Typed tool registry & permission perimeter
-│   ├── policies/              # Deterministic business rules & decision engines
-│   ├── rag/                   # Knowledge retrieval, ingestion, & citation provenance
-│   ├── ml/                    # Risk scoring, anomaly detection, & versioned models
-│   ├── approvals/             # Human-in-the-loop approval state management
-│   ├── audit/                 # Append-only audit logging & trace provenance
-│   ├── security/              # Auth, input sanitization, & secret governance
-│   └── evaluation/            # In-code evaluation probes & assertion monitors
-├── simulator/                 # Synthetic business event & ground-truth data generator
-├── workers/                   # Async task workers & background queue consumers
-├── database/                  # Database models and Alembic migrations
-│   ├── models/                # SQLAlchemy operational models
-│   └── migrations/            # Alembic migration scripts
-├── integrations/              # External service adapters & sandbox clients
-│   ├── mock/                  # High-fidelity mock services
-│   ├── gmail/                 # Email integration
-│   ├── razorpay/              # Payment gateway integration
-│   ├── shopify/               # Order management integration
-│   └── whatsapp/              # Messaging channel integration
-├── evals/                     # Evaluation datasets, evaluators, & regression suites
-│   ├── datasets/              # Golden benchmark scenarios & ground truth
-│   ├── evaluators/            # Task-specific scoring evaluators
-│   ├── regression/            # Automated regression suites
-│   └── reports/               # Evaluation run outputs & metric reports
-├── tests/                     # Multi-tier test suite
-│   ├── unit/                  # Unit tests for deterministic logic
-│   ├── integration/           # Integration tests for databases & tools
-│   ├── e2e/                   # Full workflow end-to-end tests
-│   ├── security/              # Security perimeter & prompt injection tests
-│   └── resilience/            # Failure recovery & chaos tests
-├── docs/                      # Project documentation & operational guides
-├── architecture/              # System architecture specifications & diagrams
-├── scripts/                   # Developer automation & lifecycle scripts
-├── docker/                    # Dockerfiles & container initialization scripts
-├── docker-compose.yml         # Local infrastructure orchestration
-└── .env.example               # Environment variables template
+┌───────────────────────────────────────────────────────────────────────────┐
+│                       THE CORE ARCHITECTURAL LAW                          │
+│                                                                           │
+│   The LLM proposes actions; deterministic software boundaries decide.     │
+│   The LLM must NEVER directly control authorization, payment capture,     │
+│       refunds, credentials, database truth, or supervisor approvals.      │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🖥️ Operations Control Center — Visual Overview
+
+OpsWingman provides a complete mission-control interface for operations teams, customer support leads, fulfillment managers, and compliance supervisors.
+
+### 1. Operations Overview Dashboard (`/`)
+Live operational telemetry displaying real-time metrics, financial velocity, fulfillment status, and exception distribution:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  OPSWINGMAN  │  Dashboard  Orders  Customers  Payments  Logistics  Tickets  Agent  Approvals  Audit  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                  │
+│  [ Total Orders ]       [ Today's Revenue ]      [ Delayed Shipments ]     [ Pending Approvals ] │
+│     500 orders             ₹1,48,250                 38 shipments               12 requests      │
+│     +18 today              Peak: ₹2,10,000           Transit Disruption         Supervisor Gated │
+│                                                                                                  │
+│  ┌─ 7-Day Revenue & Volume Trend ──────────────────────┐  ┌─ Payment Method Distribution ────────┐│
+│  │  ₹250k ┤                                            │  │  UPI         ██████████████ 55%     ││
+│  │  ₹200k ┤              ╭───╮                         │  │  CARD        ██████ 25%             ││
+│  │  ₹150k ┤        ╭──╮  │   │   ╭──╮                  │  │  NET_BANKING ████ 15%               ││
+│  │  ₹100k ┤  ╭──╮  │  │  │   │   │  │   ╭──╮           │  │  COD         █ 5%                   ││
+│  │   ₹50k ┤  │  │  │  │  │   │   │  │   │  │           │  └──────────────────────────────────────┘│
+│  │        └──┴──┴──┴──┴──┴───┴───┴──┴───┴──┴───────────│                                          │
+│  │           Mon   Tue    Wed    Thu    Fri   Sat   Sun  │  ┌─ Prioritized Exceptions ────────────┐│
+│  └─────────────────────────────────────────────────────┘  │  ⚠️ Bluedart delay at Hubli Hub     ││
+│                                                           │  ⚠️ Card auth timeout on ORD-1004   ││
+│  ┌─ Order Pipeline Distribution ───────────────────────┐  │  ⚠️ INR 6,500 refund pending review ││
+│  │ DELIVERED (260) │ SHIPPED (75) │ PROCESSING (45)    │  └──────────────────────────────────────┘│
+│  │ CONFIRMED (35)  │ ON_HOLD (20) │ CANCELLED (40)     │                                          │
+│  └─────────────────────────────────────────────────────┘                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 2. AI Operations Agent Console (`/agent`)
+Interactive prompt interface where natural language operational requests are deterministically parsed, evaluated against RAG policies, checked against ML risk models, and executed through typed tools:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  AI Operations Agent Console                                            Runtime: Deterministic   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  Prompt: "Please cancel order ORD-2026-1045 and refund INR 6,500 due to shipping delay"          │
+│  Order Ref: ORD-2026-1045                                                  [ Execute Action ]    │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ▼ Live Agent Execution Graph & Policy Provenance                                                │
+│                                                                                                  │
+│  [Step 1] Intent Extracted: "cancel_order_and_refund" (Confidence: 0.96)                         │
+│  [Step 2] RAG Policy Evaluated: POL-CAN-001 (Order Cancellation Policy v1.0.0)                   │
+│           Citation: "Orders exceeding INR 5,000 require supervisor approval before refund."       │
+│  [Step 3] ML Risk Assessment: Score = 0.88 [HIGH RISK] -> Policy Gate Triggered                 │
+│  [Step 4] Workflow State: WAITING_FOR_APPROVAL (Approval ID: APV-20261111-A89E)                  │
+│                                                                                                  │
+│  ┌─ Supervisor Review Required ───────────────────────────────────────────────────────────────┐  │
+│  │ Action: `refund_order`  │  Amount: ₹6,500.00  │  Target: Order ORD-2026-1045               │  │
+│  │ Reason: High-value refund policy threshold exceeded                                        │  │
+│  │ [ ✓ Approve & Resume Workflow ]                [ ✗ Reject Proposal ]                       │  │
+│  └────────────────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                                  │
+│  [Step 5] Tool Dispatched: `process_refund` -> Razorpay Gateway (Ref: PAY-UPI-0291)              │
+│  [Step 6] State Verification: Database checked -> Payment status confirmed REFUNDED              │
+│  [Step 7] Final Workflow State: COMPLETED (Verified)                                             │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3. Human-in-the-Loop Approval Queue (`/approvals`)
+Supervisor sign-off interface gating all high-risk and policy-restricted proposals with verified citations:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  Approval Queue                                             Gated Proposals: 12 Pending          │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ID          ACTION         ENTITY      RISK    REASON                       CITATION   ACTION   │
+│  ──────────────────────────────────────────────────────────────────────────────────────────────  │
+│  APV-1001    cancel_order   ORD-8942    HIGH    Dispatched order cancel      POL-CAN-01 [Review] │
+│  APV-1002    process_refund ORD-3012    HIGH    Amount > ₹5,000 threshold    POL-REF-01 [Review] │
+│  APV-1003    address_update ORD-4921    MEDIUM  Inter-city routing change    POL-SHP-01 [Review] │
+│  APV-1004    override_sla   ORD-1109    HIGH    Carrier transit escalation   POL-SHP-01 [Review] │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 🏛️ System Architecture
 
-> **Core rule:** the LLM *proposes*, deterministic code *decides*. Authorization, policy, execution, verification and audit all live outside the model.
-
-**Legend:** 🟩 green = provisioned in Phase 0 (Docker infra) · ⬜ grey dashed = planned (Phases 1–7)
+> **Core rule:** the LLM *proposes*, deterministic code *decides*. Authorization, policy, execution, verification, and audit all live outside the model.
 
 ```mermaid
 flowchart TB
     %% ---------- INPUTS ----------
     subgraph CH["1 · Input Channels"]
         direction LR
-        EMAIL["Email<br/>Mailpit → Gmail sandbox"]
-        HOOK["Webhooks<br/>WhatsApp sim · Shopify · Razorpay"]
-        APIIN["REST API events"]
-        SIM["Business Simulator<br/>seeded ground truth"]
+        EMAIL["Email Ingress<br/>Mailpit → Gmail Sandbox"]
+        HOOK["Webhooks<br/>Shopify · Razorpay · WhatsApp"]
+        APIIN["REST API Events<br/>Customer & Staff Portals"]
+        SIM["Business Simulator<br/>Deterministic Ground Truth"]
     end
 
-    UI["Admin UI · Next.js + React Flow<br/>Workflows · Approvals · Audit · Analytics"]
+    UI["Operations Control Center · Next.js 14<br/>Dashboard · Agent · Approvals · Exceptions · Scenarios"]
 
-    %% ---------- BACKEND ----------
-    subgraph BE["2 · Backend · FastAPI + Pydantic"]
+    %% ---------- BACKEND RUNTIME ----------
+    subgraph BE["2 · Backend Runtime · FastAPI + Pydantic"]
         direction LR
-        INGEST["Event Ingestion<br/>validation · idempotency keys"]
-        QUEUE[("Valkey<br/>queue / cache")]
-        WORKER["Async Workers"]
+        INGEST["Event Ingestion<br/>schema validation · idempotency"]
+        QUEUE[("Valkey<br/>async queue / cache")]
+        WORKER["Async Task Workers"]
     end
 
-    %% ---------- AGENT ----------
-    subgraph AG["3 · Agent Orchestrator · LangGraph"]
+    %% ---------- AGENT ORCHESTRATION ----------
+    subgraph AG["3 · Agent Orchestration · LangGraph"]
         direction LR
-        ORCH["Stateful workflow graph<br/>checkpoints · retry · resume"]
-        LLM["Local LLM · Ollama<br/>intent · plan · structured action"]
+        ORCH["Stateful Workflow Graph<br/>checkpoints · retry · resume"]
+        LLM["Inference Engine · Ollama / Gemini<br/>intent parsing · structured action plan"]
     end
 
-    %% ---------- CONTEXT ----------
+    %% ---------- CONTEXT & SIGNALS ----------
     subgraph CTX["4 · Context and Signals"]
         direction LR
-        RAG["RAG<br/>pgvector + full-text<br/>policy provenance"]
-        ML["ML Risk and Anomaly<br/>XGBoost / LightGBM<br/>Isolation Forest"]
+        RAG["RAG Engine<br/>PostgreSQL pgvector + full-text<br/>policy citations & versioning"]
+        ML["ML Risk & Anomaly<br/>XGBoost / LightGBM<br/>Isolation Forest Scoring"]
     end
 
-    %% ---------- CONTROL PLANE ----------
-    subgraph CTRL["5 · Deterministic Control Plane  (never delegated to the LLM)"]
+    %% ---------- DETERMINISTIC CONTROL PLANE ----------
+    subgraph CTRL["5 · Deterministic Control Plane (Outside the LLM)"]
         direction LR
-        VAL["Action schema<br/>validation"]
-        POL["Policy engine"]
-        RBAC["RBAC +<br/>per-tool permissions"]
-        GATE{"Risk gate"}
+        VAL["Action Schema<br/>validation"]
+        POL["Policy Engine<br/>business rules"]
+        RBAC["RBAC & Tool<br/>permissions"]
+        GATE{"Risk Gate<br/>score > 0.80?"}
         VAL --> POL --> RBAC --> GATE
     end
 
-    APPROVER["Human Approver"]
-    APPROVAL["Approval Queue<br/>pause · resume"]
+    APPROVER["Human Supervisor"]
+    APPROVAL["Approval Queue<br/>pause & resume"]
     BLOCK["Blocked / Escalated"]
 
-    %% ---------- EXECUTION ----------
-    subgraph EXEC["6 · Execution"]
+    %% ---------- EXECUTION & VERIFICATION ----------
+    subgraph EXEC["6 · Execution & Verification"]
         direction LR
-        REG["Tool Registry<br/>typed · validated I/O<br/>MCP / native"]
-        VER["Verifier<br/>confirm real state change"]
+        REG["Tool Registry<br/>typed validated I/O<br/>idempotent actions"]
+        VER["Verification Engine<br/>inspects DB state<br/>ghost-success detection"]
     end
 
-    subgraph EXT["External Systems  (mock → sandbox)"]
+    subgraph EXT["External Systems & Sandboxes"]
         direction LR
         ORD["Orders"]
-        PAY["Payments"]
-        LOG["Logistics"]
-        MSG["Email / Messaging"]
-        TKT["Tickets / CRM"]
+        PAY["Payments (Razorpay)"]
+        LOG["Logistics (Delhivery / BlueDart)"]
+        MSG["Messaging (WhatsApp / Email)"]
+        TKT["Tickets (Zendesk / Freshdesk)"]
     end
 
-    %% ---------- DATA ----------
+    %% ---------- DATA LAYER ----------
     subgraph DATA["7 · Data Layer · PostgreSQL 16 + pgvector"]
         direction LR
-        BIZ[("Business state<br/>customers · orders · payments<br/>shipments · tickets")]
-        WFS[("Workflow state<br/>runs · checkpoints · approvals")]
-        KB[("Knowledge base<br/>policy embeddings")]
+        BIZ[("Business State<br/>customers · orders · payments<br/>shipments · tickets")]
+        WFS[("Workflow State<br/>runs · checkpoints · approvals")]
+        KB[("Knowledge Base<br/>SOP & policy embeddings")]
     end
 
-    %% ---------- OBSERVABILITY & EVAL ----------
-    subgraph OBS["8 · Observability, Audit and Evaluation"]
+    %% ---------- AUDIT & OBSERVABILITY ----------
+    subgraph OBS["8 · Observability & Compliance Trail"]
         direction LR
-        AUDIT[("Append-only<br/>Audit log")]
+        AUDIT[("Append-Only<br/>Audit Trail")]
         OTEL["OpenTelemetry"]
-        LF["Langfuse<br/>self-hosted"]
-        EVAL["Eval harness<br/>golden datasets · regression"]
-        CI["GitHub Actions CI"]
+        LF["Langfuse Tracing"]
+        CI["CI/CD Validation"]
     end
 
-    %% ---------- MAIN FLOW ----------
+    %% ---------- FLOW CONNECTORS ----------
     EMAIL & HOOK & APIIN --> INGEST
     SIM -.->|"synthetic events"| INGEST
-    UI <-->|"REST"| INGEST
+    UI <-->|"REST API"| INGEST
     INGEST --> QUEUE --> WORKER --> ORCH
-    ORCH <-->|"prompt / structured output"| LLM
-    ORCH -->|"retrieve policy"| RAG
-    ORCH -->|"risk features"| ML
-    RAG -->|"evidence + version"| ORCH
-    ML -->|"risk band"| ORCH
+    ORCH <-->|"intent extraction"| LLM
+    ORCH -->|"query policy"| RAG
+    ORCH -->|"evaluate features"| ML
+    RAG -->|"citation evidence"| ORCH
+    ML -->|"risk score"| ORCH
 
     ORCH ==>|"proposed action (JSON)"| VAL
-    GATE -->|"LOW · permitted"| REG
-    GATE -->|"HIGH · approval required"| APPROVAL
-    GATE -->|"denied / policy conflict"| BLOCK
+    GATE -->|"LOW RISK: auto-permit"| REG
+    GATE -->|"HIGH RISK: gate proposal"| APPROVAL
+    GATE -->|"POLICY VIOLATION: reject"| BLOCK
     APPROVAL <--> APPROVER
-    UI <-->|"review"| APPROVAL
+    UI <-->|"supervisor action"| APPROVAL
     APPROVAL -->|"approved"| REG
     APPROVAL -->|"rejected"| BLOCK
     BLOCK --> ORCH
 
     REG --> ORD & PAY & LOG & MSG & TKT
     ORD & PAY & LOG & MSG & TKT --> VER
-    VER -->|"verified outcome"| ORCH
+    VER -->|"verified state"| ORCH
 
-    %% ---------- DATA + OBS EDGES ----------
     ORCH <--> WFS
     REG <--> BIZ
     RAG <--> KB
     APPROVAL <--> WFS
-    ORCH -.-> OTEL
-    OTEL -.-> LF
+    ORCH -.-> OTEL -.-> LF
     GATE -.-> AUDIT
     APPROVAL -.-> AUDIT
     VER -.-> AUDIT
-    LF -.-> EVAL
-    EVAL -.-> CI
-
-    %% ---------- STYLES ----------
-    classDef built fill:#d1fae5,stroke:#059669,color:#064e3b,stroke-width:2px;
-    classDef planned fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray:4 3;
-    classDef control fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:2px;
-    classDef human fill:#fef3c7,stroke:#d97706,color:#78350f;
-
-    class QUEUE,BIZ,WFS,KB,LF built;
-    class EMAIL,HOOK,APIIN,SIM,UI,INGEST,WORKER,ORCH,LLM,RAG,ML,APPROVAL,BLOCK,REG,VER,ORD,PAY,LOG,MSG,TKT,AUDIT,OTEL,EVAL,CI planned;
-    class VAL,POL,RBAC,GATE control;
-    class APPROVER human;
 ```
 
-### Request lifecycle: high-value refund (Scenario A2)
+---
+
+## 🔄 Core Workflows & Request Lifecycles
+
+### 1. High-Value Refund & Human-in-the-Loop Resumption
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor C as Customer
-    participant API as FastAPI + Queue
-    participant AG as LangGraph Agent
-    participant CX as RAG + ML Risk
-    participant CP as Control Plane
-    actor H as Human Approver
-    participant T as Tools + Payment sandbox
-    participant V as Verifier
-    participant A as Audit / Traces
+    actor C as Customer / Operator
+    participant API as FastAPI Ingress
+    participant AG as LangGraph Orchestrator
+    participant RAG as RAG Policy Engine
+    participant ML as ML Risk Scorer
+    participant CTRL as Deterministic Control Plane
+    actor S as Supervisor (Approver)
+    participant T as Tool Registry
+    participant V as Verification Engine
+    participant DB as PostgreSQL State
+    participant A as Audit Log
 
-    C->>API: "Order 8472 cancel karo aur refund kar do"
-    API->>API: validate + idempotency check
-    API->>AG: enqueue event, start run (CREATED → RUNNING)
-    AG->>T: get_customer / get_order / get_payment (LOW)
-    AG->>CX: refund policy + risk features
-    CX-->>AG: policy evidence (versioned) + risk = HIGH
-    AG->>CP: proposed action {refund_order, amount, risk: high}
-    CP->>CP: schema + policy + RBAC checks
-    CP-->>AG: approval required
-    AG->>H: WAITING_FOR_APPROVAL (no refund executed)
-    H-->>AG: approve / reject
-    alt approved
-        AG->>T: request_refund (idempotency key)
-        T-->>V: refund result
-        V->>V: confirm refund actually landed
-        V-->>AG: VERIFY = SUCCESS
-        AG->>C: confirmation message
-    else rejected
-        AG->>C: controlled explanation / escalation
-    end
-    AG-->>A: every step: tool · policy · model · result
-    Note over AG,A: Run ends COMPLETED / FAILED / CANCELLED
+    C->>API: POST /agent/run {"input_text": "Cancel and refund ORD-1045"}
+    API->>API: Validate schema & idempotency key
+    API->>AG: Initialize run (CREATED → RUNNING)
+    AG->>T: Query order details (ORD-1045)
+    T-->>AG: Order status: CONFIRMED, Amount: INR 6,500.00
+    AG->>RAG: Retrieve cancellation & refund policies
+    RAG-->>AG: POL-CAN-001 (Refunds > ₹5,000 require supervisor approval)
+    AG->>ML: Evaluate transaction risk features
+    ML-->>AG: Risk Score: 0.88 (HIGH RISK)
+    AG->>CTRL: Submit proposed action {action: "process_refund", amount: 6500}
+    CTRL->>CTRL: Evaluate policy rules & risk band
+    CTRL-->>AG: Action GATED: Approval required
+    AG->>S: Pause workflow: WAITING_FOR_APPROVAL (APV-20261111)
+    AG->>A: Record audit event: APPROVAL_REQUESTED
+
+    S->>API: POST /approvals/APV-20261111/approve {"approver": "supervisor@opswingman.local"}
+    API->>AG: Resume workflow run
+    AG->>T: Execute `refund_payment` with idempotency key
+    T->>DB: Update Payment (REFUNDED) & Order (CANCELLED)
+    T-->>V: Gateway transaction response
+    V->>DB: Query database directly (verify status == REFUNDED)
+    V-->>AG: Verification: SUCCESS (0 discrepancies)
+    AG->>A: Record audit event: ACTION_EXECUTED & VERIFICATION_COMPLETED
+    AG-->>C: Response: "Refund of INR 6,500 confirmed and verified in DB."
 ```
 
-### Local infrastructure (Docker Compose)
+### 2. State Verification Engine — Ghost Success Detection
+
+A core reliability hazard in AI operations is when external tools report success but the underlying database state remains unmutated (or mutations fail silently). OpsWingman enforces **two-phase state verification**:
 
 ```mermaid
-flowchart LR
-    DEV["Developer machine"]
+sequenceDiagram
+    autonumber
+    participant AG as Agent Workflow
+    participant T as Tool Execution
+    participant DB as Operational Database
+    participant V as Verification Engine
+    participant A as Audit & Compliance
 
-    subgraph HOST["Host processes"]
-        FE["Next.js frontend<br/>:3000"]
-        BE["FastAPI backend<br/>:8000 · /docs"]
-        OLL["Ollama<br/>local LLM + embeddings"]
-    end
-
-    subgraph DC["docker compose"]
-        PG[("PostgreSQL 16 + pgvector<br/>:5432")]
-        VK[("Valkey<br/>:6379")]
-        MP["Mailpit<br/>SMTP :1025 · UI :8025"]
-        LFW["Langfuse<br/>:3001"]
-        LFD[("Langfuse DB<br/>Postgres 16")]
-    end
-
-    DEV --> FE --> BE
-    BE --> PG
-    BE --> VK
-    BE -->|"SMTP"| MP
-    BE -->|"inference"| OLL
-    BE -.->|"traces"| LFW --> LFD
-
-    classDef built fill:#d1fae5,stroke:#059669,color:#064e3b;
-    classDef planned fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray:4 3;
-    class PG,VK,MP,LFW,LFD built;
-    class FE,BE,OLL planned;
+    AG->>T: Execute `cancel_order` (Order ORD-4021)
+    T-->>AG: Tool returns: {"status": "SUCCESS", "message": "Order cancelled"}
+    Note over AG,V: The LLM would normally trust this output. OpsWingman DOES NOT.
+    AG->>V: Verify order state (Expected: CANCELLED)
+    V->>DB: Direct read of Order ORD-4021
+    DB-->>V: Actual status: SHIPPED (Unmutated)
+    V->>V: Compare expected vs actual
+    V-->>AG: Divergence Detected: Discrepancy logged!
+    AG->>A: Raise Alert: GHOST_SUCCESS_PREVENTED
+    AG->>AG: Transition to ERROR / ESCALATE (halt false customer notification)
 ```
 
+### 3. Order Lifecycle State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Customer Checkout Initiated
+    PENDING --> CONFIRMED: Payment Captured (UPI / Card)
+    PENDING --> FAILED: Payment Declined (ERR_CARD_DECLINED)
+
+    CONFIRMED --> PROCESSING: Warehouse Manifest Created
+    CONFIRMED --> CANCELLED: Pre-fulfillment Cancel (< ₹5,000 Auto / > ₹5,000 Supervisor)
+
+    PROCESSING --> SHIPPED: Dispatched via Carrier (Delhivery / BlueDart)
+    PROCESSING --> CANCELLED: Supervisor Override
+
+    SHIPPED --> IN_TRANSIT: Carrier Hub Advancement
+    IN_TRANSIT --> DELAYED: Network Disruption / Delay Logged (> 48h)
+    DELAYED --> IN_TRANSIT: Transit Resumed
+    IN_TRANSIT --> OUT_FOR_DELIVERY: Final Hub Clearance
+
+    OUT_FOR_DELIVERY --> DELIVERED: Proof of Delivery (OTP / Signature)
+    OUT_FOR_DELIVERY --> RETURNED_TO_ORIGIN: Failed Delivery Attempts
+
+    DELIVERED --> RETURNED: Return Verified (RMA Initiated)
+    RETURNED --> REFUNDED: Refund Captured via Gateway
+    CANCELLED --> REFUNDED: Auto / Approved Refund
+
+    DELIVERED --> [*]
+    REFUNDED --> [*]
+```
+
+---
+
+## 🧪 Operational Scenario Runner (7 Ground-Truth Scenarios)
+
+The built-in Scenario Runner (`/scenarios` and `POST /operations/scenarios/run`) allows instant end-to-end verification of all seven core business scenarios against live database state:
+
+| ID | Scenario Name | Category | Tested Architectural Mechanisms |
+|:---|:---|:---|:---|
+| **1** | **Normal Order Lifecycle Flow** | Full Lifecycle | Order creation, payment capture, carrier dispatch, tracking generation, delivery verification |
+| **2** | **Delayed Shipment & Exception** | Logistics | Transit disruption logging, revised ETA, automatic exception creation in Control Center |
+| **3** | **High-Value Refund & Approval** | Policy & Human Review | Deterministic policy evaluation, ML risk gating (>0.80), supervisor approval, resume workflow |
+| **4** | **Shipped Order Cancellation Rejection** | Policy Invariance | In-transit cancellation protection under POL-CAN-001, supervisor rejection, database invariance |
+| **5** | **Duplicate Request Protection** | Idempotency | Idempotency cache layer, distributed lock guard, replay cache, zero duplicate mutations |
+| **6** | **Payment Failure & Safe State** | Gateway Integration | Gateway issuer decline, safe invariant check (order stays PENDING, never marked CONFIRMED) |
+| **7** | **Verification Divergence Detection** | State Verification | Ghost-success detection, tool-vs-DB discrepancy analysis, automated operational alert |
+
+---
+
+## 📦 Enterprise Synthetic Dataset
+
+OpsWingman includes a deterministic, production-scale synthetic business dataset representing an active Indian e-commerce merchant:
+
+| Entity | Volume | Characteristics |
+|:---|---:|:---|
+| **Customers** | **150** | Realistic names, cities (Mumbai, Bengaluru, Delhi, Pune, Hyderabad), GSTINs, phone numbers |
+| **Products** | **80** | Electronics, home goods, apparel with realistic Indian Rupee prices (₹199 – ₹24,999) |
+| **Orders** | **500** | Distributed across `DELIVERED`, `SHIPPED`, `PROCESSING`, `CONFIRMED`, `CANCELLED`, `ON_HOLD`, `PENDING` |
+| **Order Items** | **1,000+** | Multi-item baskets with realistic item quantities and SKU relationships |
+| **Payments** | **500** | UPI (55%), Card (25%), Net Banking (15%), COD (5%) with Razorpay transaction references |
+| **Shipments** | **400+** | Carriers (Delhivery, BlueDart, DTDC, Xpressbees), live tracking numbers, transit locations |
+| **Support Tickets** | **120** | Delivery delays, payment queries, return requests, warranty claims with SLA priority bands |
+| **Approvals** | **55+** | Supervisor override records with RAG citations, risk bands, and decision timestamps |
+| **Audit Events** | **1,600+** | Append-only event trail tagged with provenance metadata (`is_synthetic: true`) |
+| **Knowledge Base** | **32** | Policies (cancellations, refunds, shipping SLAs), SOPs, FAQs, carrier guidelines |
 
 ---
 
 ## 🛠️ Technology Stack
 
 | Layer | Technologies |
-| :--- | :--- |
-| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0, Alembic |
-| **Frontend** | Next.js, React, TypeScript, Tailwind CSS, React Flow |
-| **Database** | PostgreSQL 16 + `pgvector` extension |
-| **Cache & Queue** | Valkey (Redis-compatible) |
-| **Local Services** | Mailpit (SMTP capture), Ollama (Local LLM / Embeddings) |
-| **Observability** | OpenTelemetry, Self-Hosted Langfuse |
-| **Testing** | pytest, pytest-asyncio, Playwright |
+|:---|:---|
+| **Frontend** | Next.js 14 (App Router), TypeScript, Tailwind CSS, Lucide React, React Flow |
+| **Backend** | Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2.0 (Sync & Async), Alembic |
+| **Database** | PostgreSQL 16 + `pgvector` extension for semantic vector search |
+| **Cache & Queue** | Valkey (Redis-compatible, in-memory cache & async worker queue) |
+| **Local Infrastructure** | Mailpit (SMTP server), Ollama (local LLM inference & embeddings) |
+| **Observability** | OpenTelemetry, Self-Hosted Langfuse, append-only structured audit logs |
+| **Testing & Quality** | pytest (359 tests), pytest-asyncio, Ruff linter/formatter, Next.js build verification |
 
 ---
 
-## 🚀 Quick Start (Phase 0 Local Setup)
+## 🚀 Quick Start Guide
 
 ### 1. Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose
 - [Python 3.12+](https://www.python.org/)
 - [Node.js 20+](https://nodejs.org/)
 
-### 2. Configure Environment
+### 2. Clone & Configure Environment
 ```bash
-# Copy example environment variables
+git clone https://github.com/<your-org>/opswingman.git
+cd opswingman
+
+# Copy development configuration template
 cp .env.example .env
 ```
 
-### 3. Start Local Infrastructure
+### 3. Start Infrastructure Services
 ```bash
-# Start PostgreSQL (pgvector), Valkey, Mailpit, and Langfuse
+# Starts PostgreSQL (pgvector), Valkey, Mailpit, and Langfuse
 docker compose up -d postgres valkey mailpit langfuse-db langfuse
 ```
 
-### 4. Run Backend
+### 4. Setup & Start Backend
 ```bash
-# Set up Python virtual environment
+# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+
 pip install -r backend/requirements.txt
 
-# Run FastAPI dev server
+# Run migrations
+alembic upgrade head
+
+# Run FastAPI backend
 uvicorn backend.main:app --reload --port 8000
 ```
-Backend API will be live at [http://localhost:8000](http://localhost:8000) (Interactive Swagger UI at `/docs`).
+Interactive OpenAPI Swagger documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-### 5. Run Frontend
+### 5. Setup & Start Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Frontend UI will be live at [http://localhost:3000](http://localhost:3000).
+The Operations Control Center is available at [http://localhost:3000](http://localhost:3000).
 
-### 6. Run Baseline Tests
+---
+
+## 🧪 Testing & Code Quality Gates
+
+OpsWingman enforces multi-tier quality gates covering unit logic, integration boundaries, security controls, and frontend compilation:
+
 ```bash
-pytest tests/unit
+# 1. Run full backend test suite (359 tests across unit, integration, and security)
+python -m pytest tests -q
+
+# 2. Run Python linting and code formatting check (0 violations enforced)
+python -m ruff check .
+
+# 3. Run frontend TypeScript type checking and ESLint
+cd frontend
+npm run lint
+
+# 4. Run frontend production build verification
+npm run build
 ```
 
 ---
 
-## 🚦 Continuous Integration & Quality Gates
+## 🌐 API Route Matrix
 
-Every push and pull request is automatically validated through the GitHub Actions CI pipeline (`.github/workflows/ci.yml`) against eight strict quality gates:
-
-1. **Repository Hygiene**: `git diff --check` ensures no trailing whitespace or corrupt line-endings.
-2. **Static Type Checking**: `npx pyright backend tests database simulator scripts` strictly enforces zero errors and type safety across all subsystems.
-3. **Automated Test Suite**: `python -m pytest -q` executes all unit, integration, and resilience tests (301+ tests).
-4. **Database Migration Consistency**: Runs `alembic upgrade head`, `alembic current`, `alembic heads`, and `alembic check` against a live PostgreSQL 16 container to verify schema synchronicity.
-5. **Configuration & Security Validation**:
-   - Validates development settings via `python scripts/ops.py check-config --env development`.
-   - Validates that production mode (`--env production`) strictly rejects default secrets or active debug modes.
-6. **Production & Staging Preflight Validation**: `python scripts/ops.py preflight` verifies 21 strict validation gates including container security, manifest health probes, staging overlay packaging, migration strategy, and secret hygiene.
-7. **Production Container Build**: Builds the hardened non-root container image (`docker/Dockerfile.backend`).
-8. **Container Smoke Test**: Boots the production container in isolation and verifies HTTP 200 responses from `/health` and `/health/live`.
-
-### Reproducing CI Checks Locally
-
-Run the following suite of commands to match the CI pipeline locally:
-
-```bash
-# 1. Format and hygiene check
-git diff --check
-
-# 2. Static typecheck
-npx pyright backend tests database simulator scripts
-
-# 3. Full test suite
-python -m pytest -q
-
-# 4. Alembic migration verification (requires local postgres)
-alembic current
-alembic heads
-alembic check
-
-# 5. Configuration validation
-python scripts/ops.py check-config --env development
-
-# 6. Production preflight validation
-python scripts/ops.py preflight
-
-# 7. Container packaging validation
-docker build -f docker/Dockerfile.backend -t opswingman-backend:local .
-```
+| Domain | Method | Endpoint | Purpose |
+|:---|:---|:---|:---|
+| **Dashboard** | `GET` | `/operations/dashboard` | Aggregated revenue trends, pipeline counts, exception metrics |
+| **Exceptions** | `GET` | `/operations/exceptions` | Prioritized work queue for transit delays, failed payments, and SLA breaches |
+| **Scenarios** | `POST` | `/operations/scenarios/run` | Execute one of 7 ground-truth business scenarios with live verification |
+| **Orders** | `GET` | `/orders` | Paginated order list with search, status, and price filtering |
+| **Orders** | `GET` | `/orders/{order_id}` | Detailed order view with line items, payments, and shipments |
+| **Orders** | `POST` | `/orders/{order_id}/cancel` | Cancel order with policy validation |
+| **Customers** | `GET` | `/customers` | Customer directory with spend totals, order counts, and city filters |
+| **Customers** | `GET` | `/customers/{customer_id}` | Customer profile with recent order history and tickets |
+| **Payments** | `GET` | `/payments` | Financial ledger with status and payment method filters |
+| **Payments** | `POST` | `/payments/{payment_id}/refund` | Process gateway refund with idempotency check |
+| **Shipments** | `GET` | `/shipments` | Fulfillment tracking ledger with carrier and delay filters |
+| **Shipments** | `POST` | `/shipments/{shipment_id}/deliver` | Confirm delivery and verify order transition |
+| **Tickets** | `GET` | `/tickets` | Support ticket queue with priority, channel, and status filtering |
+| **Tickets** | `POST` | `/tickets` | Create support ticket with auto-generated reference number |
+| **Tickets** | `POST` | `/tickets/{ticket_id}/status` | Update resolution status with resolution notes |
+| **Agent** | `POST` | `/agent/run` | Execute natural language operations workflow through agent graph |
+| **Agent** | `POST` | `/agent/runs/{run_id}/resume` | Resume paused workflow after supervisor approval or rejection |
+| **Approvals** | `GET` | `/approvals` | List pending gated proposals with risk level and policy citations |
+| **Approvals** | `POST` | `/approvals/{id}/approve` | Supervisor authorization of gated proposal |
+| **Approvals** | `POST` | `/approvals/{id}/reject` | Supervisor rejection of gated proposal |
+| **Audit** | `GET` | `/audit/events` | Query append-only audit trail with entity and actor filtering |
+| **Health** | `GET` | `/health/live` | Container liveness probe |
+| **Health** | `GET` | `/health/ready` | Database and Valkey readiness probe |
 
 ---
 
-## ☸️ Production Deployment (Kubernetes)
+## 🔒 Security & Safe Execution Invariants
 
-Cloud-agnostic, production-grade Kubernetes manifests are provided under [`deploy/kubernetes/`](file:///deploy/kubernetes/):
-
-- `namespace.yaml`: Isolated `opswingman` namespace.
-- `configmap.yaml`: Non-sensitive runtime configuration (`DEBUG=false`, `ENVIRONMENT=production`, CORS, logging).
-- `secret.yaml`: Secrets template for `APP_SECRET_KEY`, database credentials, and external tokens.
-- `deployment.yaml`: RollingUpdate Deployment (2 replicas, non-root security context, resource limits, `/health/live` liveness probe, `/health/ready` readiness probe).
-- `service.yaml`: Internal `ClusterIP` Service exposing port 8000.
-- `ingress.yaml`: Cloud-agnostic Ingress routing traffic to `opswingman-backend-service` with `spec.ingressClassName: nginx`.
-- `migration-job.yaml`: Controlled Kubernetes Job for schema migrations (`opswingman-db-migrate`).
-- `kustomization.yaml`: Kustomize composition for one-command lifecycle operations.
-- `overlays/staging/`: Staging Kustomize overlay configured for isolated namespace `opswingman-staging`.
-
-### 1. Prerequisites
-- A running Kubernetes cluster (v1.26+)
-- `kubectl` configured with cluster access
-- Ingress controller (e.g. `ingress-nginx`, Traefik, AWS ALB Controller, or GCP GKE Ingress)
-- External or separately provisioned **PostgreSQL 16 (with `pgvector`)** and **Valkey / Redis** instances
-
-### 2. Configure Secrets
-Populate [`deploy/kubernetes/secret.yaml`](file:///deploy/kubernetes/secret.yaml) with production credentials retrieved securely from your Secret Manager (e.g. HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager, or GitHub Secrets):
-```yaml
-stringData:
-  APP_SECRET_KEY: "<cryptographically-secure-key-min-32-chars-from-secret-manager>"
-  DATABASE_URL: "postgresql+asyncpg://<user>:<password>@<db-host>:5432/opswingman"
-  DATABASE_SYNC_URL: "postgresql://<user>:<password>@<db-host>:5432/opswingman"
-```
-
-### 3. Deploy to Cluster
-Apply all manifests using Kustomize:
-```bash
-kubectl apply -k deploy/kubernetes/
-```
-*(Or apply individually: `kubectl apply -f deploy/kubernetes/`)*
-
-### 4. Monitor Rollout & Pod Health
-```bash
-# Check deployment rollout
-kubectl rollout status deployment/opswingman-backend -n opswingman
-
-# Check pod status and probe health
-kubectl get pods -n opswingman -l app.kubernetes.io/name=opswingman-backend
-```
-
-### 5. Verify Health Probes Locally via Port Forward
-```bash
-kubectl port-forward svc/opswingman-backend-service 8000:8000 -n opswingman
-
-# Liveness probe
-curl http://localhost:8000/health/live
-
-# Readiness probe (verifies active DB connectivity)
-curl http://localhost:8000/health/ready
-```
-
-### 6. Teardown
-```bash
-kubectl delete -k deploy/kubernetes/
-```
-
----
-
-## 🧪 Staging Deployment & Hardening (Kubernetes)
-
-OpsWingman provides a dedicated Kustomize staging overlay under [`deploy/kubernetes/overlays/staging/`](file:///deploy/kubernetes/overlays/staging/) designed for pre-production integration testing in an isolated namespace.
-
-### 1. Staging Architecture & Environment Separation
-- **Isolated Namespace**: Runs in `opswingman-staging` (ensures zero resource collision with production).
-- **Environment**: Sets `ENVIRONMENT=staging` with interactive OpenAPI documentation enabled (`DOCS_ENABLED=true`).
-- **CORS Configuration**: Restricts browser origins to `["https://staging.opswingman.io"]`.
-- **Modern Ingress**: Configures standard `spec.ingressClassName: nginx` targeting host `api-staging.opswingman.example.com`.
-- **TLS Provisioning**: Add a `tls:` block to [`deploy/kubernetes/overlays/staging/ingress-patch.yaml`](file:///deploy/kubernetes/overlays/staging/ingress-patch.yaml) or attach `cert-manager.io/cluster-issuer: letsencrypt-staging` annotation once cluster certificates are provisioned.
-
-### 2. Migration Concurrency Resolution
-- **Multi-Replica Safety**: In multi-replica Kubernetes environments, `AUTO_MIGRATE` is set to `"false"` in `configmap.yaml` to prevent concurrent startup race conditions.
-- **Controlled Migration Job**: Schema migrations are executed once via the dedicated Kubernetes Job [`deploy/kubernetes/migration-job.yaml`](file:///deploy/kubernetes/migration-job.yaml) or via `python scripts/ops.py migrate` before rollout.
-- **Schema Readiness Polling**: Pods enforce `WAIT_FOR_MIGRATION="true"`, waiting for database schema readiness at Alembic head via `python scripts/ops.py check-migration-ready --timeout 60` before booting the API process.
-- **Local Dev Preserved**: Local single-container development (`docker-compose.yml`) defaults to `AUTO_MIGRATE=true` for zero-friction iteration.
-- **Migration & Rollback Implications**:
-  - Migrations must follow the expand/contract pattern and remain backwards-compatible with running pods.
-  - Rolling back application pods (`kubectl rollout undo`) reverts container binaries but does not down-migrate the database. If a migration added a column or index, the previous application version continues to operate safely against the expanded schema.
-  - Destructive schema rollbacks require planned maintenance and running `alembic downgrade <target_rev>`.
-
-### 3. Staging Deployment Sequence
-
-#### Manual Deployment via Kustomize
-```bash
-# 1. Ensure staging namespace exists
-kubectl create namespace opswingman-staging --dry-run=client -o yaml | kubectl apply -f -
-
-# 2. Inject staging secrets securely from environment or secret manager (never hardcode in files)
-# Generate a cryptographically secure staging secret key:
-# STAGING_APP_SECRET_KEY=$(openssl rand -hex 32)
-# Load database credentials from your secure secret store (e.g. Vault, AWS Secrets Manager, 1Password):
-kubectl create secret generic opswingman-backend-secrets \
-  --namespace opswingman-staging \
-  --from-literal=APP_SECRET_KEY="${STAGING_APP_SECRET_KEY:?STAGING_APP_SECRET_KEY must be set}" \
-  --from-literal=DATABASE_URL="${STAGING_DATABASE_URL:?STAGING_DATABASE_URL must be set}" \
-  --from-literal=DATABASE_SYNC_URL="${STAGING_DATABASE_SYNC_URL:?STAGING_DATABASE_SYNC_URL must be set}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# 3. Define target immutable image (exact same image for migration and deployment)
-export STAGING_IMAGE="ghcr.io/<org>/opswingman-backend:sha-$(git rev-parse --short HEAD)"
-
-# 4. Run schema migration job with the EXACT target image before deploying application
-kubectl delete job opswingman-db-migrate -n opswingman-staging --ignore-not-found
-python -c "
-import yaml
-with open('deploy/kubernetes/migration-job.yaml') as f:
-    j = yaml.safe_load(f)
-j['spec']['template']['spec']['containers'][0]['image'] = '$STAGING_IMAGE'
-with open('deploy/kubernetes/migration-job.yaml', 'w') as f:
-    yaml.dump(j, f)
-"
-kubectl apply -f deploy/kubernetes/migration-job.yaml -n opswingman-staging
-kubectl wait --for=condition=complete job/opswingman-db-migrate -n opswingman-staging --timeout=180s
-
-# 5. Apply staging Kustomize overlay with image override
-python -c "
-import yaml
-with open('deploy/kubernetes/overlays/staging/kustomization.yaml') as f:
-    k = yaml.safe_load(f)
-repo, tag = '$STAGING_IMAGE'.rsplit(':', 1)
-k['images'][0]['newName'] = repo
-k['images'][0]['newTag'] = tag
-with open('deploy/kubernetes/overlays/staging/kustomization.yaml', 'w') as f:
-    yaml.dump(k, f)
-"
-kubectl apply -k deploy/kubernetes/overlays/staging/
-
-# 6. Monitor rollout status
-kubectl rollout status deployment/opswingman-backend -n opswingman-staging --timeout=300s
-```
-
-#### Automated Deployment via GitHub Actions
-A dedicated staging workflow is provided at [`.github/workflows/deploy-staging.yml`](file:///.github/workflows/deploy-staging.yml):
-- Triggered manually via **Actions** -> **Staging Deployment** (`workflow_dispatch`).
-- Gated by GitHub Environment `staging`.
-- Deploys immutable SHA container tags without triggering production deployment.
-- Executes the migration job prior to updating deployment pods.
-
-### 4. Health Verification & Rollback
-```bash
-# Verify pod and probe health
-kubectl get pods -n opswingman-staging -l app.kubernetes.io/name=opswingman-backend
-
-# Port-forward to query endpoints
-kubectl port-forward svc/opswingman-backend-service 8000:8000 -n opswingman-staging
-curl -s http://localhost:8000/health/live
-curl -s http://localhost:8000/health/ready
-curl -s http://localhost:8000/risk/model-info
-
-# Emergency rollback (reverts container binaries only; does not downgrade database schema)
-kubectl rollout history deployment/opswingman-backend -n opswingman-staging
-kubectl rollout undo deployment/opswingman-backend -n opswingman-staging
-kubectl rollout status deployment/opswingman-backend -n opswingman-staging
-```
-
----
-
-## 🚀 Production Image Release & Deployment
-
-OpsWingman utilizes a provider-neutral GitHub Actions release workflow (`.github/workflows/release.yml`) for container image publishing and automated Kubernetes rolling updates.
-
-### 1. Required GitHub Configuration
-
-#### Repository Variables (`Settings -> Secrets and variables -> Actions -> Variables`)
-- `REGISTRY`: Target container registry hostname (e.g. `ghcr.io`, `docker.io`, `<account_id>.dkr.ecr.<region>.amazonaws.com`). Defaults to `ghcr.io`.
-- `IMAGE_NAME`: Repository image namespace/path (e.g. `myorg/opswingman-backend`). Defaults to the GitHub repository name.
-
-#### Repository Secrets (`Settings -> Secrets and variables -> Actions -> Secrets`)
-- `REGISTRY_USERNAME`: Username or robot account with container push permissions.
-- `REGISTRY_PASSWORD`: Access token, personal access token (PAT), or password.
-- `KUBECONFIG`: (Optional) Base64 or plaintext kubeconfig containing cluster credentials for continuous delivery.
-
-### 2. How to Perform a Release
-
-#### Method A: Git Version Tagging (Recommended)
-Tagging a commit on `main` triggers image building, tagging, and deployment:
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-#### Method B: Manual Workflow Dispatch
-1. Navigate to **Actions** -> **Production Release & Deployment**.
-2. Click **Run workflow**.
-3. Optionally specify a custom `image_tag` or enable `deploy_to_k8s: true`.
-
-### 3. Image Naming & Tagging Strategy
-Every build generates immutable OCI tags to prevent accidental overwrites:
-- **Immutable Git SHA**: `<REGISTRY>/<IMAGE_NAME>:sha-<SHORT_SHA>` (e.g., `ghcr.io/myorg/opswingman-backend:sha-7b3e1a0`)
-- **Release Version**: `<REGISTRY>/<IMAGE_NAME>:v0.1.0` (when triggered via version tag)
-- **Latest**: `<REGISTRY>/<IMAGE_NAME>:latest` (only on semantic version tags)
-
-All images include standard OCI provenance labels (`org.opencontainers.image.revision`, `org.opencontainers.image.version`, `org.opencontainers.image.source`).
-
-### 4. Production Approval & Security Controls
-- **GitHub Environment Protection**: The `deploy-production` job is bound to the `production` environment. Production deployments require required reviewer approval before executing.
-- **Pull Request Isolation**: The release and deployment workflow cannot be triggered by pull requests (`pull_request` events are explicitly excluded).
-- **Dry-Run Validation Gate**: Manifests are automatically validated with `scripts/ops.py validate-release` and `kubectl kustomize` before any container build starts.
-
-### 5. Kubernetes Dry Run & Manual Deployment
-
-#### Validate Manifests Locally
-```bash
-# Validate release readiness
-python scripts/ops.py validate-release
-
-# Preview rendered manifests
-kubectl kustomize deploy/kubernetes/
-```
-
-#### Deploy a Specific Immutable Image
-```bash
-# Set deployment to a specific immutable tag
-kubectl set image deployment/opswingman-backend backend=ghcr.io/myorg/opswingman-backend:sha-7b3e1a0 -n opswingman
-
-# Monitor rolling update progress
-kubectl rollout status deployment/opswingman-backend -n opswingman --timeout=300s
-```
-
-### 6. Emergency Rollback Procedure
-If an issue occurs after deploying to production, execute a zero-downtime rolling rollback:
-```bash
-# 1. View previous rollout revisions
-kubectl rollout history deployment/opswingman-backend -n opswingman
-
-# 2. Undo deployment to previous stable revision
-kubectl rollout undo deployment/opswingman-backend -n opswingman
-
-# 3. Monitor rollback progress until healthy
-kubectl rollout status deployment/opswingman-backend -n opswingman
-```
-
----
-
-## 📋 Production Deployment Checklist & Preflight Verification
-
-Before initiating a production rollout to real infrastructure, verify the following three operational pillars:
-
-### 1. Infrastructure Requirements
-- [ ] **PostgreSQL 16**: Live database instance with `pgvector` extension enabled.
-- [ ] **Valkey / Redis**: High-availability key-value cache and async queue instance.
-- [ ] **Kubernetes Cluster**: Production Kubernetes cluster (v1.26+) accessible via kubectl.
-- [ ] **Ingress Controller**: Active ingress controller (e.g. `ingress-nginx`, Traefik, AWS ALB).
-- [ ] **DNS & TLS**: Public/private DNS records pointing to the ingress controller with valid TLS certificates.
-- [ ] **Container Registry**: Authenticated OCI container registry (GHCR, ECR, GCR, Docker Hub).
-
-### 2. Secrets Provisioning
-- [ ] `APP_SECRET_KEY`: Cryptographically secure secret key (min 16 characters).
-- [ ] `DATABASE_URL`: Connection string for async SQLAlchemy (`postgresql+asyncpg://...`).
-- [ ] `DATABASE_SYNC_URL`: Connection string for sync Alembic migrations (`postgresql://...`).
-- [ ] `REGISTRY_USERNAME` & `REGISTRY_PASSWORD`: CI/CD robot credentials for container publishing.
-- [ ] `KUBECONFIG`: Cluster deployment authentication secret in GitHub Secrets.
-- [ ] `LANGFUSE_PUBLIC_KEY` & `LANGFUSE_SECRET_KEY`: (Optional) Telemetry credentials if tracing is active.
-
-### 3. Deployment & Verification Execution
-1. **Run Production Preflight**:
-   ```bash
-   python scripts/ops.py preflight
-   ```
-   Ensures 0 `FAIL` items across manifests, security contexts, probes, and secret hygiene.
-2. **Build and Tag Production Container**:
-   Build immutable image tagged with Git SHA (`sha-<SHORT_SHA>`) and semantic release tag (`vX.Y.Z`).
-3. **Publish to Registry**:
-   Push immutable image to container registry.
-4. **Approve Production Environment**:
-   Approve deployment via GitHub Actions Environment reviewer gate.
-5. **Apply Kustomize Manifests**:
-   Deploy updated image via `kubectl apply -k deploy/kubernetes/`.
-6. **Verify Rolling Rollout**:
-   `kubectl rollout status deployment/opswingman-backend -n opswingman --timeout=300s`
-7. **Verify Post-Deployment Endpoints**:
-   - `GET /health/live` -> 200 `{"status": "alive"}`
-   - `GET /health/ready` -> 200 `{"status": "ready", "services": {"api": "ok", "database": "ok"}}`
-   - `GET /risk/model-info` -> 200 (Model metadata and operational risk features)
-8. **Verify Container Logs**:
-   `kubectl logs -n opswingman -l app.kubernetes.io/name=opswingman-backend --tail=100`
-9. **Emergency Rollback Ready**:
-   Confirm ability to execute `kubectl rollout undo deployment/opswingman-backend -n opswingman`.
-
----
-
-## 📚 Documentation Links
-- [Architecture Foundation](file:///architecture/foundation.md)
-- [Local Development Guide](file:///docs/development.md)
-- [Coding & Security Conventions](file:///docs/conventions.md)
-- [Master Blueprint Document](file:///OpsWingman_Project_Master_Blueprint.docx)
+1. **Deterministic Perimeter**: AI models never possess API keys to payment gateways or carrier APIs. Actions are executed via typed Pydantic tools governed by static permission schemas.
+2. **Atomic Single-Transaction Control**: Synthetic seeding and operational workflows operate within strict transaction boundaries. Intermediate phases flush without committing; any failure triggers complete rollback.
+3. **Target Environment Guards**: The seeder rejects execution on production, staging, or unauthorized remote hosts (`validate_database_safety`), protecting live databases.
+4. **Credential Leakage Prevention**: Connection passwords, API tokens, and secret parameters are sanitized from audit logs, trace payloads, and error outputs.
 
 ---
 
 ## 📄 License
-This project is licensed under the Apache 2.0 License.
+
+OpsWingman is licensed under the [Apache 2.0 License](LICENSE).

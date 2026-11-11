@@ -12,6 +12,9 @@ from database.models.enums import (
     PaymentMethod,
     PaymentStatus,
     ShipmentStatus,
+    TicketChannel,
+    TicketPriority,
+    TicketStatus,
 )
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -304,3 +307,146 @@ class WorkflowRunResponse(BaseModel):
     updated_at: datetime
 
 
+# ==============================================================================
+# Extended Operations & Enterprise Control Center Schemas
+# ==============================================================================
+
+
+class OrderListResponse(BaseModel):
+    total: int
+    items: List[OrderResponse]
+    limit: int
+    offset: int
+
+
+class OrderDetailResponse(OrderResponse):
+    payments: List[PaymentResponse] = []
+    shipments: List[ShipmentResponse] = []
+    customer: Optional[CustomerResponse] = None
+
+
+class CustomerListItemResponse(CustomerResponse):
+    total_spend: Decimal = Decimal("0.00")
+    order_count: int = 0
+
+
+class CustomerListResponse(BaseModel):
+    total: int
+    items: List[CustomerListItemResponse]
+    limit: int
+    offset: int
+
+
+class TicketResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    ticket_number: str
+    customer_id: uuid.UUID
+    order_id: Optional[uuid.UUID] = None
+    title: str
+    description: str
+    channel: TicketChannel
+    status: TicketStatus
+    priority: TicketPriority
+    category: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CustomerDetailResponse(CustomerListItemResponse):
+    recent_orders: List[OrderResponse] = []
+    recent_tickets: List[TicketResponse] = []
+
+
+class PaymentRefundRequest(BaseModel):
+    reason: Optional[str] = Field(default="Customer requested refund", min_length=1)
+
+
+class PaymentListResponse(BaseModel):
+    total: int
+    items: List[PaymentResponse]
+    limit: int
+    offset: int
+
+
+class ShipmentListResponse(BaseModel):
+    total: int
+    items: List[ShipmentResponse]
+    limit: int
+    offset: int
+
+
+class TicketCreateRequest(BaseModel):
+    customer_id: uuid.UUID
+    order_id: Optional[uuid.UUID] = None
+    title: str = Field(..., min_length=1, max_length=255)
+    description: str = Field(..., min_length=1)
+    priority: TicketPriority = TicketPriority.MEDIUM
+    channel: TicketChannel = TicketChannel.EMAIL
+    category: Optional[str] = "Customer Service"
+
+
+class TicketStatusUpdateRequest(BaseModel):
+    status: TicketStatus
+    resolution_notes: Optional[str] = None
+
+
+class TicketListResponse(BaseModel):
+    total: int
+    items: List[TicketResponse]
+    limit: int
+    offset: int
+
+
+class DashboardMetricsResponse(BaseModel):
+    total_orders: int
+    orders_today: int
+    orders_processing: int
+    orders_at_risk: int
+    revenue_today: Decimal
+    revenue_this_month: Decimal
+    pending_payments: int
+    failed_payments: int
+    refunds_pending: int
+    shipments_in_transit: int
+    delayed_shipments: int
+    open_tickets: int
+    pending_approvals: int
+    sla_breaches: int
+    orders_by_status: Dict[str, int]
+    payment_method_stats: Dict[str, int]
+    recent_daily_revenue: List[Dict[str, Any]]
+    recent_daily_orders: List[Dict[str, Any]]
+
+
+class OperationalExceptionItem(BaseModel):
+    id: str
+    category: str
+    severity: str
+    title: str
+    description: str
+    entity_type: str
+    entity_id: str
+    status: str
+    recommended_action: str
+    first_detected: datetime
+
+
+class OperationalExceptionsResponse(BaseModel):
+    total: int
+    exceptions: List[OperationalExceptionItem]
+
+
+class ScenarioRunRequest(BaseModel):
+    scenario_id: str = Field(..., description="Scenario identifier (1-7)")
+
+
+class ScenarioRunResponse(BaseModel):
+    scenario_id: str
+    name: str
+    success: bool
+    summary: str
+    timeline: List[str]
+    entities: Dict[str, Any] = Field(default_factory=dict)

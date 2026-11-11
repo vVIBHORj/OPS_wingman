@@ -140,10 +140,424 @@ attached knowledge citations before granting or denying approval. Once decided, 
 resumes deterministically.""",
         "metadata": {"sop_id": "SOP-ESC-001", "department": "Operations Management"},
     },
+    {
+        "document_id": "POL-RET-001",
+        "title": "POL-RET-001: 7-Day Return and Replacement Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/returns_v1.md",
+        "version": "1.0.0",
+        "content": """# 7-Day Return and Replacement Policy (POL-RET-001)
+
+## 1. Return Eligibility
+Customers may initiate a return or replacement request within 7 calendar days of delivery.
+Items must be in original condition with packaging, tags, and accessories intact.
+
+## 2. Non-Returnable Categories
+Hygiene-sensitive items and software licenses cannot be returned once unsealed.
+
+## 3. Reverse Logistics & Pickup
+Reverse pickup is scheduled within 48 hours of approval. Once passed warehouse inspection,
+the refund or replacement dispatch is executed within 3 business days.""",
+        "metadata": {"policy_id": "POL-RET-001", "department": "Reverse Logistics"},
+    },
+    {
+        "document_id": "POL-SEC-001",
+        "title": "POL-SEC-001: Customer Data Privacy & Redaction Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/security_privacy_v1.md",
+        "version": "1.0.0",
+        "content": """# Customer Data Privacy & Redaction Policy (POL-SEC-001)
+
+## 1. Sensitive Data Masking
+Personally identifiable financial data (card numbers, CVV, NetBanking passwords, UPI PINs)
+must never be logged, persisted in plain text, or surfaced in LLM context windows.
+
+## 2. Audit Trail Sanitization
+All tool payloads, logs, and trace telemetry must pass through recursive credential redaction
+substituting sensitive keys with '[REDACTED]'. Access to unsanitized customer identifiers is
+restricted to authenticated supervisors.""",
+        "metadata": {"policy_id": "POL-SEC-001", "department": "Information Security"},
+    },
+    {
+        "document_id": "POL-DIS-001",
+        "title": "POL-DIS-001: Promotional Discount & Coupon Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/discount_abuse_v1.md",
+        "version": "1.0.0",
+        "content": """# Promotional Discount & Coupon Policy (POL-DIS-001)
+
+## 1. Coupon Application Rules
+Discounts may not exceed 30% of total order subtotal unless authorized under seasonal promotions.
+Only one coupon code may be applied per transaction.
+
+## 2. Refund Pro-Rata Adjustment
+In the event of partial returns or order modifications, promotional discounts are redistributed
+proportionally across remaining items. The refunded amount cannot exceed the net amount paid.""",
+        "metadata": {"policy_id": "POL-DIS-001", "department": "Marketing & Finance"},
+    },
+    {
+        "document_id": "POL-PRC-001",
+        "title": "POL-PRC-001: Price Protection & Adjustment Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/price_match_v1.md",
+        "version": "1.0.0",
+        "content": """# Price Protection & Adjustment Policy (POL-PRC-001)
+
+## 1. Post-Purchase Price Match
+If catalog price drops within 72 hours of purchase, a customer may request store credit
+equal to the price difference upon verification.
+
+## 2. Exclusions
+Flash sales, clearance inventory, and bundled items are exempt from price protection.""",
+        "metadata": {"policy_id": "POL-PRC-001", "department": "Pricing Operations"},
+    },
+    {
+        "document_id": "POL-INV-001",
+        "title": "POL-INV-001: Stock Out & Backorder Allocation Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/inventory_allocation_v1.md",
+        "version": "1.0.0",
+        "content": """# Stock Out & Backorder Allocation Policy (POL-INV-001)
+
+## 1. Out-of-Stock Notification
+If inventory discrepancy prevents order fulfillment, alert the customer within 4 hours.
+Options include waiting for restocking (up to 5 days) or immediate full refund with voucher.
+
+## 2. Order Cancellation on Restock Failure
+If restock is unfeasible within 7 days, order is cancelled automatically and 100% refunded.""",
+        "metadata": {"policy_id": "POL-INV-001", "department": "Warehouse Fulfillment"},
+    },
+    {
+        "document_id": "POL-FRAUD-001",
+        "title": "POL-FRAUD-001: Fraud Prevention & Chargeback Defense Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/fraud_prevention_v1.md",
+        "version": "1.0.0",
+        "content": """# Fraud Prevention & Chargeback Defense Policy (POL-FRAUD-001)
+
+## 1. High-Risk Transaction Screening
+Orders exceeding INR 25,000 or originating from blacklisted IP addresses or delivery pin codes
+are placed ON_HOLD for manual fraud verification by operations specialists.
+
+## 2. Dispute Evidence Submission
+Upon chargeback notice, proof of delivery (digital signature, OTP timestamp) and customer
+communication logs must be compiled within 5 business days for gateway submission.""",
+        "metadata": {"policy_id": "POL-FRAUD-001", "department": "Risk & Compliance"},
+    },
+    {
+        "document_id": "POL-VIP-001",
+        "title": "POL-VIP-001: Enterprise & VIP Customer SLA Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/vip_sla_v1.md",
+        "version": "1.0.0",
+        "content": """# Enterprise & VIP Customer SLA Policy (POL-VIP-001)
+
+## 1. VIP Qualification
+Customers with lifetime spend over INR 50,000 or 10+ completed orders qualify for VIP priority.
+
+## 2. Service Guarantees
+- Priority same-day warehouse dispatch for all orders placed before 3 PM.
+- Dedicated 2-hour response SLA on support tickets.
+- Expedited instant refund processing for return items up to INR 5,000.""",
+        "metadata": {"policy_id": "POL-VIP-001", "department": "Customer Relations"},
+    },
+    {
+        "document_id": "POL-WTY-001",
+        "title": "POL-WTY-001: Warranty & Repair Claims Policy",
+        "doc_type": DocumentType.POLICY,
+        "source": "policies/warranty_v1.md",
+        "version": "1.0.0",
+        "content": """# Warranty & Repair Claims Policy (POL-WTY-001)
+
+## 1. Standard Coverage
+All electronics and hardware products carry a minimum 12-month manufacturer replacement warranty.
+
+## 2. Claim Procedure
+Customer submits proof of purchase and video of functional defect. An authorized service ticket
+is generated within 24 hours, followed by free doorstep collection for repair or replacement.""",
+        "metadata": {"policy_id": "POL-WTY-001", "department": "Product Quality"},
+    },
+    {
+        "document_id": "SOP-RTO-001",
+        "title": "SOP-RTO-001: Return to Origin (RTO) Processing SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/rto_handling_v1.md",
+        "version": "1.0.0",
+        "content": """# Return to Origin (RTO) Processing SOP (SOP-RTO-001)
+
+## 1. RTO Triggers
+Shipments with 3 consecutive failed attempts, incorrect address, or customer refusal
+are designated RTO by the carrier and routed back to fulfillment centers.
+
+## 2. Inbound Processing
+Upon physical receipt, warehouse staff inspects box integrity within 24 hours. If undamaged,
+items return to active inventory and customer is notified regarding store credit or refund.""",
+        "metadata": {"sop_id": "SOP-RTO-001", "department": "Logistics Operations"},
+    },
+    {
+        "document_id": "SOP-DMG-001",
+        "title": "SOP-DMG-001: Transit Damage Investigation & Claims SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/damage_claims_v1.md",
+        "version": "1.0.0",
+        "content": """# Transit Damage Investigation & Claims SOP (SOP-DMG-001)
+
+## 1. Reporting Window
+Customer reports damaged packaging or item within 48 hours of delivery with photographic evidence.
+
+## 2. Investigation Protocol
+Operations agent verifies outer box condition with logistics carrier. Replacement shipment is
+dispatched immediately without waiting for carrier insurance settlement.""",
+        "metadata": {"sop_id": "SOP-DMG-001", "department": "Quality Assurance"},
+    },
+    {
+        "document_id": "SOP-ADR-001",
+        "title": "SOP-ADR-001: Mid-Transit Address Correction SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/address_change_v1.md",
+        "version": "1.0.0",
+        "content": """# Mid-Transit Address Correction SOP (SOP-ADR-001)
+
+## 1. Pincode Match Rule
+Address corrections within destination pincode or delivery hub can be submitted via carrier API.
+
+## 2. Inter-City Rerouting
+Rerouting across different cities requires parcel recall and re-manifesting with shipping fee.""",
+        "metadata": {"sop_id": "SOP-ADR-001", "department": "Logistics Dispatch"},
+    },
+    {
+        "document_id": "SOP-PAY-001",
+        "title": "SOP-PAY-001: Payment Double-Debit & Reconciliation SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/payment_reconciliation_v1.md",
+        "version": "1.0.0",
+        "content": """# Payment Double-Debit & Reconciliation SOP (SOP-PAY-001)
+
+## 1. Double Debit Detection
+When payment gateway captures two transactions with identical order_id within 15 minutes:
+- Primary transaction is linked to the order.
+- Secondary transaction is flagged for automated instant refund via gateway API.
+
+## 2. Bank Settlement Window
+Customer is advised that bank authorization hold releases typically take 2-4 business days.""",
+        "metadata": {"sop_id": "SOP-PAY-001", "department": "Payment Operations"},
+    },
+    {
+        "document_id": "SOP-WH-001",
+        "title": "SOP-WH-001: Warehouse Dispatch Exceptions SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/warehouse_dispatch_v1.md",
+        "version": "1.0.0",
+        "content": """# Warehouse Dispatch Exceptions SOP (SOP-WH-001)
+
+## 1. Manifest Cutoff Times
+All confirmed orders received by 14:00 IST are manifested and handed over by 18:00 IST.
+
+## 2. Missed Dispatches
+Orders failing handover SLA are escalated to shift lead and flagged with priority transit.""",
+        "metadata": {"sop_id": "SOP-WH-001", "department": "Fulfillment"},
+    },
+    {
+        "document_id": "SOP-COD-001",
+        "title": "SOP-COD-001: Cash on Delivery Verification SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/cod_verification_v1.md",
+        "version": "1.0.0",
+        "content": """# Cash on Delivery Verification SOP (SOP-COD-001)
+
+## 1. Telephonic & OTP Verification
+All Cash on Delivery (COD) orders exceeding INR 3,000 require automated WhatsApp/SMS OTP
+verification before warehouse dispatch to minimize RTO rates.
+
+## 2. High RTO Risk Accounts
+Customers with 2+ historical unaccepted COD deliveries are restricted to prepaid payment.""",
+        "metadata": {"sop_id": "SOP-COD-001", "department": "Risk Control"},
+    },
+    {
+        "document_id": "SOP-RETRY-001",
+        "title": "SOP-RETRY-001: Delivery Attempt Re-scheduling SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/delivery_retry_v1.md",
+        "version": "1.0.0",
+        "content": """# Delivery Attempt Re-scheduling SOP (SOP-RETRY-001)
+
+## 1. First Attempt Failure
+When an attempt fails due to customer unavailability, carrier triggers SMS alert enabling customer
+to select a preferred re-delivery slot on the subsequent business day.
+
+## 2. Final Notice
+A maximum of 3 delivery attempts are permitted before initiating Return to Origin.""",
+        "metadata": {"sop_id": "SOP-RETRY-001", "department": "Last-Mile Logistics"},
+    },
+    {
+        "document_id": "SOP-CHG-001",
+        "title": "SOP-CHG-001: Chargeback Defense & Evidence Dossier SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/chargeback_defense_v1.md",
+        "version": "1.0.0",
+        "content": """# Chargeback Defense & Evidence Dossier SOP (SOP-CHG-001)
+
+## 1. Evidence Compilation
+Finance operations gathers signed delivery proof, customer communications, IP logs, and invoice.
+
+## 2. Response Submission
+Dossier is submitted to acquirer bank portal within 7 business days of dispute initiation.""",
+        "metadata": {"sop_id": "SOP-CHG-001", "department": "Financial Compliance"},
+    },
+    {
+        "document_id": "SOP-AUD-001",
+        "title": "SOP-AUD-001: Operational Audit & Verification Inspection SOP",
+        "doc_type": DocumentType.SOP,
+        "source": "sops/audit_governance_v1.md",
+        "version": "1.0.0",
+        "content": """# Operational Audit & Verification Inspection SOP (SOP-AUD-001)
+
+## 1. Divergence Audits
+Operations supervisors inspect verification logs daily. Any case where a tool reports success
+but database state differs ('ghost success') must be flagged as CRITICAL for engineering triage.
+
+## 2. Non-Repudiation
+Audit events are append-only and immutable. State changes cannot be modified post-facto.""",
+        "metadata": {"sop_id": "SOP-AUD-001", "department": "Operational Integrity"},
+    },
+    {
+        "document_id": "FAQ-ORD-001",
+        "title": "FAQ-ORD-001: How can I track my order in real time?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/order_tracking.md",
+        "version": "1.0.0",
+        "content": """# How can I track my order in real time? (FAQ-ORD-001)
+
+Once your order is manifested, you will receive a tracking link via SMS and email with your
+unique carrier tracking reference (e.g., Delhivery, BlueDart). You can track live transit milestones
+directly in your customer portal under the Orders tab.""",
+        "metadata": {"faq_id": "FAQ-ORD-001", "category": "Tracking"},
+    },
+    {
+        "document_id": "FAQ-CAN-001",
+        "title": "FAQ-CAN-001: Why was my cancellation request rejected?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/cancellation_faq.md",
+        "version": "1.0.0",
+        "content": """# Why was my cancellation request rejected? (FAQ-CAN-001)
+
+Under company policy (POL-CAN-001), orders can only be cancelled while in PENDING or CONFIRMED.
+Once an order has transitioned to PROCESSING or SHIPPED, cancellation is locked because the parcel
+is already manifested with logistics carrier. You can easily initiate a return once delivered.""",
+        "metadata": {"faq_id": "FAQ-CAN-001", "category": "Cancellation"},
+    },
+    {
+        "document_id": "FAQ-REF-001",
+        "title": "FAQ-REF-001: When will my refund be credited?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/refund_faq.md",
+        "version": "1.0.0",
+        "content": """# When will my refund be credited? (FAQ-REF-001)
+
+Refunds are initiated immediately upon cancellation or warehouse return inspection.
+UPI and NetBanking refunds reflect within 24-48 business hours. Credit/Debit card refunds
+take 5-7 business days depending on your issuing bank.""",
+        "metadata": {"faq_id": "FAQ-REF-001", "category": "Refunds"},
+    },
+    {
+        "document_id": "FAQ-SHP-001",
+        "title": "FAQ-SHP-001: What should I do if my package is delayed?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/shipment_delay.md",
+        "version": "1.0.0",
+        "content": """# What should I do if my package is delayed? (FAQ-SHP-001)
+
+If tracking status shows no movement for more than 48 hours or exceeds estimated delivery date,
+our automated system flags an internal ticket with the carrier. You will receive an updated ETA
+by SMS, or you may chat with our Operations Assistant to request priority escalation.""",
+        "metadata": {"faq_id": "FAQ-SHP-001", "category": "Logistics"},
+    },
+    {
+        "document_id": "FAQ-PAY-001",
+        "title": "FAQ-PAY-001: Money deducted but order not confirmed?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/payment_issues.md",
+        "version": "1.0.0",
+        "content": """# Money deducted but order not confirmed? (FAQ-PAY-001)
+
+If your bank account was debited but order shows as PENDING or FAILED, this is usually due to a
+temporary banking gateway timeout. If the transaction was uncaptured, the amount is automatically
+reversed to your source account within 3 business days by your bank.""",
+        "metadata": {"faq_id": "FAQ-PAY-001", "category": "Payments"},
+    },
+    {
+        "document_id": "FAQ-RTO-001",
+        "title": "FAQ-RTO-001: Why is my shipment returning to sender?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/rto_faq.md",
+        "version": "1.0.0",
+        "content": """# Why is my shipment returning to sender? (FAQ-RTO-001)
+
+A shipment is returned to origin when the delivery partner cannot reach you across 3 attempts,
+or if the provided address or pincode is incomplete. Once received at our hub,
+a full refund will be processed.""",
+        "metadata": {"faq_id": "FAQ-RTO-001", "category": "Delivery"},
+    },
+    {
+        "document_id": "FAQ-WRN-001",
+        "title": "FAQ-WRN-001: How do I claim replacement under warranty?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/warranty_claims.md",
+        "version": "1.0.0",
+        "content": """# How do I claim replacement under warranty? (FAQ-WRN-001)
+
+Navigate to the Orders tab, select the item, and click 'Claim Warranty'. Attach a brief
+description. Our team will issue a prepaid return label and dispatch a replacement
+unit upon verification.""",
+        "metadata": {"faq_id": "FAQ-WRN-001", "category": "Warranty"},
+    },
+    {
+        "document_id": "FAQ-INV-001",
+        "title": "FAQ-INV-001: Can I get a revised tax invoice with GSTIN?",
+        "doc_type": DocumentType.FAQ,
+        "source": "faqs/tax_invoice.md",
+        "version": "1.0.0",
+        "content": """# Can I get a revised tax invoice with GSTIN? (FAQ-INV-001)
+
+Yes. If you provided your company name and GSTIN at checkout, your invoice includes B2B GST details.
+If you need an updated invoice, submit a ticket with your GSTIN within 30 days of purchase.""",
+        "metadata": {"faq_id": "FAQ-INV-001", "category": "Invoicing"},
+    },
+    {
+        "document_id": "GDL-CSR-001",
+        "title": "GDL-CSR-001: Customer De-escalation & Empathy Guidelines",
+        "doc_type": DocumentType.GUIDELINE,
+        "source": "guidelines/deescalation_v1.md",
+        "version": "1.0.0",
+        "content": """# Customer De-escalation & Empathy Guidelines (GDL-CSR-001)
+
+## 1. Empathetic Acknowledgment
+Always acknowledge customer frustration before stating company policies or limitations.
+Never place blame on the customer or third-party logistics carriers.
+
+## 2. Action-Oriented Commitments
+Provide specific timestamps and verifiable reference numbers for every next step promised.""",
+        "metadata": {"guideline_id": "GDL-CSR-001", "department": "Customer Care"},
+    },
+    {
+        "document_id": "GDL-LOG-001",
+        "title": "GDL-LOG-001: Logistics Carrier Performance Scoring Guidelines",
+        "doc_type": DocumentType.GUIDELINE,
+        "source": "guidelines/carrier_scoring_v1.md",
+        "version": "1.0.0",
+        "content": """# Logistics Carrier Performance Scoring Guidelines (GDL-LOG-001)
+
+## 1. On-Time Delivery Metric
+Carriers must maintain >= 94% on-time delivery on metro routes and >= 90% on non-metro routes.
+
+## 2. Penalty Allocation
+Carriers falling below threshold for two weeks receive reduced dispatch quotas.""",
+        "metadata": {"guideline_id": "GDL-LOG-001", "department": "Logistics Sourcing"},
+    },
 ]
 
 
-def seed_default_knowledge(session: Session) -> int:
+def seed_default_knowledge(session: Session, auto_commit: bool = False) -> int:
     """Ingests the canonical knowledge documents into the database and returns count."""
     service = RAGService(session)
     count = 0
@@ -157,12 +571,16 @@ def seed_default_knowledge(session: Session) -> int:
             content=item["content"],
             metadata=item["metadata"],
         )
-        service.ingest_document(req)
+        service.ingest_document(req, auto_commit=False)
         count += 1
+    if auto_commit:
+        session.commit()
+    else:
+        session.flush()
     return count
 
 
-def seed_knowledge_documents(session: Session) -> List[Any]:
+def seed_knowledge_documents(session: Session, auto_commit: bool = False) -> List[Any]:
     """Compatibility alias for seeding knowledge documents."""
     service = RAGService(session)
     ingested = []
@@ -176,6 +594,10 @@ def seed_knowledge_documents(session: Session) -> List[Any]:
             content=item["content"],
             metadata=item["metadata"],
         )
-        doc = service.ingest_document(req)
+        doc = service.ingest_document(req, auto_commit=False)
         ingested.append(doc)
+    if auto_commit:
+        session.commit()
+    else:
+        session.flush()
     return ingested

@@ -46,6 +46,7 @@ class RAGService:
         doc_type: Optional[DocumentType] = None,
         document_id: Optional[str] = None,
         db: Optional[Session] = None,
+        auto_commit: bool = True,
     ) -> KnowledgeDocument:
         """Ingests a knowledge document, chunks it deterministically, generates embeddings,
 
@@ -131,8 +132,11 @@ class RAGService:
                 )
                 active_db.add(chunk_obj)
 
-        active_db.commit()
-        active_db.refresh(doc)
+        if auto_commit:
+            active_db.commit()
+            active_db.refresh(doc)
+        else:
+            active_db.flush()
         return doc
 
     def get_document(

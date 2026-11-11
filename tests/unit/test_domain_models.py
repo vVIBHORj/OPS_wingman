@@ -34,6 +34,7 @@ from database.seed import (
     ORDER_DELIVERED_ID,
     ORDER_FAILED_PAYMENT_ID,
     ORDER_NORMAL_ID,
+    create_enterprise_seed_data,
     create_seed_data,
 )
 
@@ -299,3 +300,23 @@ def test_scenario_6_customer_with_multiple_orders(test_db: Session):
     order_statuses = {o.status for o in customer.orders}
     assert OrderStatus.DELIVERED in order_statuses
     assert OrderStatus.PROCESSING in order_statuses
+
+
+def test_enterprise_seed_data_generation_and_counts(test_db: Session):
+    """Verify that enterprise seed data populates target volumes deterministically."""
+    counts = create_enterprise_seed_data(test_db, confirm_enterprise=True)
+    assert counts["customers"] == 150
+    assert counts["products"] == 80
+    assert counts["orders"] == 500
+    assert counts["order_items"] >= 1000
+    assert counts["payments"] == 500
+    assert counts["shipments"] >= 400
+    assert counts["tickets"] == 120
+    assert counts["approvals"] >= 50
+    assert counts["audit_events"] >= 1500
+
+    # Test idempotency: calling again should not duplicate orders
+    second_counts = create_enterprise_seed_data(test_db, confirm_enterprise=True)
+    assert second_counts["orders"] == 500
+    assert second_counts["customers"] == 150
+    assert second_counts["products"] == 80

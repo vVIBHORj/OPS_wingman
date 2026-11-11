@@ -4,10 +4,12 @@ Provides read-only inspection of audit events, run histories, and chronological 
 """
 
 import re
-from typing import List
+from typing import List, Optional
 
+from database.models import AuditEventRecord
 from database.session import get_db
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from backend.audit.schemas import AuditEventResponse, AuditTimelineResponse
@@ -29,6 +31,35 @@ def _validate_identifier(identifier: str, field_name: str = "run_id") -> None:
                 "containing only letters, numbers, hyphens, or underscores."
             ),
         )
+
+
+@router.get(
+    "/events", response_model=List[AuditEventResponse], status_code=status.HTTP_200_OK
+)
+def list_audit_events(
+    event_type: Optional[str] = Query(default=None, description="Filter by event type"),
+    actor: Optional[str] = Query(default=None, description="Filter by actor"),
+    entity_type: Optional[str] = Query(default=None, description="Filter by entity type"),
+    entity_id: Optional[str] = Query(default=None, description="Filter by entity ID"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> List[AuditEventResponse]:
+    """Lists audit events across all workflows with filtering and pagination."""
+    query = select(AuditEventRecord)
+    if event_type:
+        query = query.where(AuditEventRecord.event_type == event_type)
+    if actor:
+        query = query.where(AuditEventRecord.actor == actor)
+    if entity_type:
+        query = query.where(AuditEventRecord.entity_type == entity_type)
+    if entity_id:
+        query = query.where(AuditEventRecord.entity_id == entity_id)
+
+    records = db.scalars(
+        query.order_by(desc(AuditEventRecord.timestamp)).offset(offset).limit(limit)
+    ).all()
+    return [AuditEventResponse.model_validate(r) for r in records]
 
 
 @router.get(

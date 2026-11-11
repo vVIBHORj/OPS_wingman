@@ -4,16 +4,21 @@ Reuses deterministic business simulator operations without duplicating rules.
 """
 
 import uuid
-from typing import Optional
+from decimal import Decimal
+from typing import Optional, Union
 
 import simulator
+from database.models import Customer, Order, OrderStatus
 from database.session import get_db
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import (
     OrderCancelRequest,
     OrderCreateRequest,
+    OrderDetailResponse,
+    OrderListResponse,
     OrderResponse,
     OrderStatusUpdateRequest,
     PaymentCreateRequest,
@@ -45,26 +50,76 @@ def create_order(
     return OrderResponse.model_validate(order)
 
 
-@router.get("", response_model=OrderResponse)
-def get_order_by_query(
-    order_number: Optional[str] = Query(default=None, description="Search order by order number"),
+@router.get("", response_model=Union[OrderResponse, OrderListResponse])
+def get_orders(
+    order_number: Optional[str] = Query(default=None, description="Exact order number search"),
+    status: Optional[OrderStatus] = Query(default=None, description="Filter by status"),
+    customer_id: Optional[uuid.UUID] = Query(default=None, description="Filter by customer ID"),
+    search: Optional[str] = Query(default=None, description="Search order number or customer"),
+    min_amount: Optional[Decimal] = Query(default=None, description="Filter by min total amount"),
+    max_amount: Optional[Decimal] = Query(default=None, description="Filter by max total amount"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-) -> OrderResponse:
-    """Retrieve an order by query parameter."""
-    if not order_number:
-        raise ValueError("order_number query parameter is required.")
-    order = simulator.get_order(session=db, order_number=order_number)
-    return OrderResponse.model_validate(order)
+) -> Union[OrderResponse, OrderListResponse]:
+    """Retrieve orders with pagination and filtering, or single order by exact order_number."""
+    # Backward-compatible exact order_number single lookup
+    if order_number and not search and not status and not customer_id and offset == 0:
+        order = simulator.get_order(session=db, order_number=order_number)
+        return OrderResponse.model_validate(order)
+
+    query = select(Order)
+    count_query = select(func.count(Order.id))
+
+    if status:
+        query = query.where(Order.status == status)
+        count_query = count_query.where(Order.status == status)
+    if customer_id:
+        query = query.where(Order.customer_id == customer_id)
+        count_query = count_query.where(Order.customer_id == customer_id)
+    if min_amount is not None:
+        query = query.where(Order.total_amount >= min_amount)
+        count_query = count_query.where(Order.total_amount >= min_amount)
+    if max_amount is not None:
+        query = query.where(Order.total_amount <= max_amount)
+        count_query = count_query.where(Order.total_amount <= max_amount)
+
+    if search:
+        search_filter = or_(
+            Order.order_number.ilike(f"%{search}%"),
+            Order.customer_id.in_(
+                select(Customer.id).where(
+                    or_(
+                        Customer.email.ilike(f"%{search}%"),
+                        Customer.first_name.ilike(f"%{search}%"),
+                        Customer.last_name.ilike(f"%{search}%"),
+                        Customer.phone.ilike(f"%{search}%"),
+                    )
+                )
+            ),
+        )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
+
+    total = db.scalar(count_query) or 0
+    orders = db.scalars(query.order_by(desc(Order.created_at)).offset(offset).limit(limit)).all()
+
+    return OrderListResponse(
+        total=total,
+        items=[OrderResponse.model_validate(o) for o in orders],
+        limit=limit,
+        offset=offset,
+    )
 
 
-@router.get("/{order_id}", response_model=OrderResponse)
+@router.get("/{order_id}", response_model=OrderDetailResponse)
 def get_order_by_id(
     order_id: uuid.UUID,
     db: Session = Depends(get_db),
-) -> OrderResponse:
-    """Retrieve an order by UUID."""
+) -> OrderDetailResponse:
+    """Retrieve order details by UUID, including payments, shipments, and customer."""
     order = simulator.get_order(session=db, order_id=order_id)
-    return OrderResponse.model_validate(order)
+    return OrderDetailResponse.model_validate(order)
 
 
 @router.post("/{order_id}/cancel", response_model=OrderResponse)

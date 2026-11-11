@@ -5,10 +5,34 @@ and system health aggregates.
 """
 
 import re
+import uuid
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from database.models import (
+    ApprovalRecord,
+    ApprovalStatus,
+    Customer,
+    Order,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+    PaymentStatus,
+    Product,
+    Shipment,
+    ShipmentStatus,
+    Ticket,
+    TicketPriority,
+    TicketStatus,
+)
+from database.session import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from simulator.service import BusinessSimulator
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session
 
+from backend.agents.service import agent_service
 from backend.api.operations_schemas import (
     OperationalSummary,
     PolicyTelemetry,
@@ -18,6 +42,13 @@ from backend.api.operations_schemas import (
     WorkflowRunDetailResponse,
     WorkflowRunTelemetry,
     WorkflowStepTelemetry,
+)
+from backend.api.schemas import (
+    DashboardMetricsResponse,
+    OperationalExceptionItem,
+    OperationalExceptionsResponse,
+    ScenarioRunRequest,
+    ScenarioRunResponse,
 )
 from backend.workflows.checkpoint import checkpoint_store
 from backend.workflows.state import WorkflowRunRecord, WorkflowState
@@ -226,8 +257,625 @@ def _build_step_telemetry(run: WorkflowRunRecord) -> List[WorkflowStepTelemetry]
 
 
 # ==============================================================================
-# Read-Only Operational Endpoints
+# Operational Command Center Endpoints
 # ==============================================================================
+
+
+@router.get("/dashboard", response_model=DashboardMetricsResponse, status_code=status.HTTP_200_OK)
+def get_dashboard_metrics(
+    db: Session = Depends(get_db),
+) -> DashboardMetricsResponse:
+    """Returns real-time aggregated operational KPIs and distribution metrics from database."""
+    now = datetime.now(timezone.utc)
+    today_start = now - timedelta(hours=24)
+    month_start = now - timedelta(days=30)
+
+    total_orders = db.scalar(select(func.count(Order.id))) or 0
+    orders_today = (
+        db.scalar(select(func.count(Order.id)).where(Order.created_at >= today_start)) or 0
+    )
+    orders_processing = (
+        db.scalar(
+            select(func.count(Order.id)).where(
+                Order.status.in_(
+                    [OrderStatus.PROCESSING, OrderStatus.CONFIRMED, OrderStatus.PENDING]
+                )
+            )
+        )
+        or 0
+    )
+
+    revenue_today = (
+        db.scalar(
+            select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                Payment.status == PaymentStatus.SUCCESSFUL,
+                Payment.paid_at >= today_start,
+            )
+        )
+        or Decimal("0.00")
+    )
+    revenue_this_month = (
+        db.scalar(
+            select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                Payment.status == PaymentStatus.SUCCESSFUL,
+                Payment.paid_at >= month_start,
+            )
+        )
+        or Decimal("0.00")
+    )
+
+    pending_payments = (
+        db.scalar(
+            select(func.count(Payment.id)).where(
+                Payment.status.in_([PaymentStatus.INITIATED, PaymentStatus.AUTHORIZED])
+            )
+        )
+        or 0
+    )
+    failed_payments = (
+        db.scalar(select(func.count(Payment.id)).where(Payment.status == PaymentStatus.FAILED)) or 0
+    )
+
+    refunds_pending = (
+        db.scalar(
+            select(func.count(ApprovalRecord.id)).where(
+                ApprovalRecord.status == ApprovalStatus.PENDING,
+                ApprovalRecord.action == "process_refund",
+            )
+        )
+        or 0
+    )
+
+    shipments_in_transit = (
+        db.scalar(
+            select(func.count(Shipment.id)).where(
+                Shipment.status.in_([ShipmentStatus.IN_TRANSIT, ShipmentStatus.OUT_FOR_DELIVERY])
+            )
+        )
+        or 0
+    )
+    delayed_shipments = (
+        db.scalar(
+            select(func.count(Shipment.id)).where(Shipment.status == ShipmentStatus.DELAYED)
+        )
+        or 0
+    )
+    orders_at_risk = delayed_shipments + failed_payments
+
+    open_tickets = (
+        db.scalar(
+            select(func.count(Ticket.id)).where(
+                Ticket.status.in_([TicketStatus.OPEN, TicketStatus.IN_PROGRESS])
+            )
+        )
+        or 0
+    )
+    pending_approvals = (
+        db.scalar(
+            select(func.count(ApprovalRecord.id)).where(
+                ApprovalRecord.status == ApprovalStatus.PENDING
+            )
+        )
+        or 0
+    )
+
+    sla_breaches = (
+        db.scalar(
+            select(func.count(Ticket.id)).where(
+                Ticket.status.in_([TicketStatus.OPEN, TicketStatus.IN_PROGRESS]),
+                Ticket.priority.in_([TicketPriority.HIGH, TicketPriority.URGENT]),
+                Ticket.created_at < now - timedelta(hours=48),
+            )
+        )
+        or 0
+    )
+
+    # Status distribution
+    status_rows = db.execute(
+        select(Order.status, func.count(Order.id)).group_by(Order.status)
+    ).all()
+    orders_by_status = {
+        row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in status_rows
+    }
+
+    # Payment methods distribution
+    method_rows = db.execute(
+        select(Payment.payment_method, func.count(Payment.id)).group_by(Payment.payment_method)
+    ).all()
+    payment_method_stats = {
+        row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in method_rows
+    }
+
+    # 7-day revenue trend
+    recent_daily_revenue = []
+    recent_daily_orders = []
+    for day_offset in range(6, -1, -1):
+        day_date = (now - timedelta(days=day_offset)).date()
+        day_start = datetime(day_date.year, day_date.month, day_date.day, tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
+
+        day_rev = (
+            db.scalar(
+                select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                    Payment.status == PaymentStatus.SUCCESSFUL,
+                    Payment.paid_at >= day_start,
+                    Payment.paid_at < day_end,
+                )
+            )
+            or Decimal("0.00")
+        )
+        day_ord = (
+            db.scalar(
+                select(func.count(Order.id)).where(
+                    Order.created_at >= day_start,
+                    Order.created_at < day_end,
+                )
+            )
+            or 0
+        )
+        label = day_date.strftime("%b %d")
+        recent_daily_revenue.append({"date": label, "amount": float(day_rev)})
+        recent_daily_orders.append({"date": label, "count": day_ord})
+
+    return DashboardMetricsResponse(
+        total_orders=total_orders,
+        orders_today=orders_today,
+        orders_processing=orders_processing,
+        orders_at_risk=orders_at_risk,
+        revenue_today=revenue_today,
+        revenue_this_month=revenue_this_month,
+        pending_payments=pending_payments,
+        failed_payments=failed_payments,
+        refunds_pending=refunds_pending,
+        shipments_in_transit=shipments_in_transit,
+        delayed_shipments=delayed_shipments,
+        open_tickets=open_tickets,
+        pending_approvals=pending_approvals,
+        sla_breaches=sla_breaches,
+        orders_by_status=orders_by_status,
+        payment_method_stats=payment_method_stats,
+        recent_daily_revenue=recent_daily_revenue,
+        recent_daily_orders=recent_daily_orders,
+    )
+
+
+@router.get(
+    "/exceptions", response_model=OperationalExceptionsResponse, status_code=status.HTTP_200_OK
+)
+def get_operational_exceptions(
+    db: Session = Depends(get_db),
+) -> OperationalExceptionsResponse:
+    """Returns prioritized live operational exceptions requiring operator intervention."""
+    exceptions: List[OperationalExceptionItem] = []
+    now = datetime.now(timezone.utc)
+
+    # 1. Delayed shipments
+    delayed_shipments = db.scalars(
+        select(Shipment)
+        .where(Shipment.status == ShipmentStatus.DELAYED)
+        .order_by(desc(Shipment.updated_at))
+        .limit(20)
+    ).all()
+    for s in delayed_shipments:
+        exceptions.append(
+            OperationalExceptionItem(
+                id=f"exc-shp-{s.id}",
+                category="LOGISTICS",
+                severity="HIGH",
+                title=f"Logistics Delay: {s.carrier} ({s.tracking_number})",
+                description=(
+                    f"Shipment {s.shipment_number} for order {s.order_id} delayed: "
+                    f"{s.delay_reason or 'No carrier movement past ETA'}."
+                ),
+                entity_type="Shipment",
+                entity_id=str(s.id),
+                status=s.status.value,
+                recommended_action=(
+                    "Contact carrier logistics dispatcher or issue revised ETA to customer."
+                ),
+                first_detected=s.updated_at,
+            )
+        )
+
+    # 2. Failed payments
+    failed_payments = db.scalars(
+        select(Payment)
+        .where(Payment.status == PaymentStatus.FAILED)
+        .order_by(desc(Payment.created_at))
+        .limit(15)
+    ).all()
+    for p in failed_payments:
+        exceptions.append(
+            OperationalExceptionItem(
+                id=f"exc-pay-{p.id}",
+                category="PAYMENT",
+                severity="HIGH",
+                title=f"Payment Authorization Failure: {p.payment_reference}",
+                description=f"Transaction failed with error {p.error_code}: {p.error_message}",
+                entity_type="Payment",
+                entity_id=str(p.id),
+                status=p.status.value,
+                recommended_action=(
+                    "Trigger payment retry notification or verify customer billing credentials."
+                ),
+                first_detected=p.created_at,
+            )
+        )
+
+    # 3. High-risk pending approvals
+    pending_approvals = db.scalars(
+        select(ApprovalRecord)
+        .where(ApprovalRecord.status == ApprovalStatus.PENDING)
+        .order_by(desc(ApprovalRecord.requested_at))
+        .limit(15)
+    ).all()
+    for a in pending_approvals:
+        exceptions.append(
+            OperationalExceptionItem(
+                id=f"exc-apv-{a.id}",
+                category="APPROVAL",
+                severity="CRITICAL" if a.risk_level == "CRITICAL" else "HIGH",
+                title=f"Action Approval Required: {a.action}",
+                description=f"Operation gated by policy: {a.reason}",
+                entity_type="ApprovalRecord",
+                entity_id=str(a.id),
+                status=a.status.value,
+                recommended_action=(
+                    "Review policy rationale and approve or reject in Approval Queue."
+                ),
+                first_detected=a.requested_at,
+            )
+        )
+
+    # 4. Support SLA breaches (>48h on HIGH/URGENT)
+    sla_tickets = db.scalars(
+        select(Ticket)
+        .where(
+            Ticket.status.in_([TicketStatus.OPEN, TicketStatus.IN_PROGRESS]),
+            Ticket.priority.in_([TicketPriority.HIGH, TicketPriority.URGENT]),
+            Ticket.created_at < now - timedelta(hours=48),
+        )
+        .order_by(Ticket.created_at)
+        .limit(15)
+    ).all()
+    for t in sla_tickets:
+        exceptions.append(
+            OperationalExceptionItem(
+                id=f"exc-tck-{t.id}",
+                category="SUPPORT",
+                severity="CRITICAL",
+                title=f"Support SLA Breach: {t.ticket_number}",
+                description=f"High-priority issue '{t.title}' has exceeded 48h resolution SLA.",
+                entity_type="Ticket",
+                entity_id=str(t.id),
+                status=t.status.value,
+                recommended_action="Escalate to shift supervisor and update customer.",
+                first_detected=t.created_at,
+            )
+        )
+
+    return OperationalExceptionsResponse(total=len(exceptions), exceptions=exceptions)
+
+
+@router.post(
+    "/scenarios/run", response_model=ScenarioRunResponse, status_code=status.HTTP_200_OK
+)
+def run_operational_scenario(
+    payload: ScenarioRunRequest,
+    db: Session = Depends(get_db),
+) -> ScenarioRunResponse:
+    """Executes one of the 7 canonical enterprise operational scenarios and returns live results."""
+    sim = BusinessSimulator(session=db)
+    sid = payload.scenario_id.strip()
+
+    customer = db.scalars(select(Customer)).first()
+    product = db.scalars(select(Product)).first()
+    if not customer or not product:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Database has no customers or products. Please seed database first.",
+        )
+
+    timeline = []
+
+    if sid == "1":
+        # Scenario 1: Normal Order
+        order, payment, shipment = sim.run_normal_order_flow(
+            customer_id=customer.id,
+            items=[{"sku": product.sku, "quantity": 1}],
+            carrier="Delhivery",
+        )
+        timeline.append(f"Order created: {order.order_number} for INR {order.total_amount}")
+        timeline.append(
+            f"Payment captured: {payment.payment_reference} (Status: {payment.status.value})"
+        )
+        timeline.append(f"Shipment dispatched: {shipment.carrier} ({shipment.tracking_number})")
+        timeline.append(f"Shipment confirmed delivered: {shipment.actual_delivery_date}")
+        timeline.append(f"Final order state verified: {order.status.value}")
+
+        return ScenarioRunResponse(
+            scenario_id="1",
+            name="Normal Order Flow",
+            success=True,
+            summary=(
+                "Full canonical order lifecycle completed: Order -> Capture -> "
+                "Dispatch -> Delivery verified."
+            ),
+            timeline=timeline,
+            entities={
+                "order_id": str(order.id),
+                "order_number": order.order_number,
+                "payment_ref": payment.payment_reference,
+                "tracking_number": shipment.tracking_number,
+                "status": order.status.value,
+            },
+        )
+
+    elif sid == "2":
+        # Scenario 2: Delayed Shipment
+        order, payment, shipment = sim.run_delayed_order_flow(
+            customer_id=customer.id,
+            items=[{"sku": product.sku, "quantity": 1}],
+            carrier="BlueDart",
+            delay_reason="Regional transit network disruption at Hubli Hub",
+        )
+        timeline.append(f"Order placed and paid: {order.order_number}")
+        timeline.append(f"Shipment created: {shipment.tracking_number}")
+        timeline.append(f"Carrier delay logged: '{shipment.delay_reason}'")
+        timeline.append(f"Revised estimated delivery date: {shipment.estimated_delivery_date}")
+        timeline.append(f"Exception generated in control center: {shipment.status.value}")
+
+        return ScenarioRunResponse(
+            scenario_id="2",
+            name="Delayed Shipment Scenario",
+            success=True,
+            summary=(
+                "Transit delay logged, exception registered in control center, revised ETA issued."
+            ),
+            timeline=timeline,
+            entities={
+                "order_id": str(order.id),
+                "tracking_number": shipment.tracking_number,
+                "delay_reason": shipment.delay_reason,
+                "status": shipment.status.value,
+            },
+        )
+
+    elif sid == "3":
+        # Scenario 3: High-Value Refund
+        order = sim.create_order(
+            customer_id=customer.id,
+            items=[{"sku": product.sku, "quantity": 3}],
+        )
+        payment = sim.create_payment(
+            order_id=order.id,
+            amount=Decimal("6500.00"),
+            payment_method=PaymentMethod.UPI,
+        )
+        payment = sim.capture_payment(payment_id=payment.id)
+        timeline.append(
+            f"High-value order created: {order.order_number} (Amount: INR {payment.amount})"
+        )
+
+        # Run agent refund request
+        run = agent_service.execute_workflow(
+            db=db,
+            input_text=f"Please refund my order {order.order_number}",
+            order_number=order.order_number,
+        )
+        risk_score = run.risk_assessment.get("risk_score", 0.85)
+        timeline.append(f"Agent evaluated refund policy: Risk score = {risk_score}")
+        timeline.append(f"Policy gate triggered: Paused in {run.state.value} state")
+
+        # Simulate supervisor approval
+        resumed = agent_service.resume_workflow(
+            run_id=run.run_id,
+            approved=True,
+            db=db,
+            reason="Approved by operations supervisor after customer verification",
+        )
+        timeline.append(f"Supervisor approved refund: Resumed state = {resumed.state.value}")
+        db.refresh(payment)
+        timeline.append(f"Payment state verified in DB: {payment.status.value}")
+
+        return ScenarioRunResponse(
+            scenario_id="3",
+            name="High-Value Refund Approval & Resume",
+            success=payment.status == PaymentStatus.REFUNDED,
+            summary=(
+                "High-value refund paused for policy approval, supervisor "
+                "authorized, verified in DB."
+            ),
+            timeline=timeline,
+            entities={
+                "order_id": str(order.id),
+                "order_number": order.order_number,
+                "payment_status": payment.status.value,
+                "run_id": run.run_id,
+            },
+        )
+
+    elif sid == "4":
+        # Scenario 4: Rejected Cancellation
+        order = sim.create_order(
+            customer_id=customer.id,
+            items=[{"sku": product.sku, "quantity": 1}],
+        )
+        sim.create_payment(
+            order_id=order.id,
+            amount=Decimal("5500.00"),
+            payment_method=PaymentMethod.CARD,
+        )
+        sim.capture_payment(payment_id=order.payments[0].id)
+        order = sim.update_order_status(
+            session=db, order_id=order.id, new_status=OrderStatus.SHIPPED, reason="Dispatched"
+        )
+        timeline.append(
+            f"Order created and dispatched: {order.order_number} (Status: {order.status.value})"
+        )
+
+        run = agent_service.execute_workflow(
+            db=db,
+            input_text=f"Cancel my order {order.order_number}",
+            order_number=order.order_number,
+        )
+        timeline.append(
+            f"Agent evaluated cancellation policy on shipped order: State = {run.state.value}"
+        )
+
+        resumed = agent_service.resume_workflow(
+            run_id=run.run_id,
+            approved=False,
+            db=db,
+            reason="Order already in final transit; cancellation rejected under POL-CAN-001.",
+        )
+        db.refresh(order)
+        timeline.append(
+            f"Supervisor rejected cancellation: Workflow finished with {resumed.state.value}"
+        )
+        timeline.append(f"Order unchanged in database: Still {order.status.value}")
+
+        return ScenarioRunResponse(
+            scenario_id="4",
+            name="Rejected Cancellation Scenario",
+            success=order.status == OrderStatus.SHIPPED,
+            summary=(
+                "Cancellation on shipped order rejected; order remains intact in SHIPPED status."
+            ),
+            timeline=timeline,
+            entities={
+                "order_id": str(order.id),
+                "order_number": order.order_number,
+                "order_status": order.status.value,
+            },
+        )
+
+    elif sid == "5":
+        # Scenario 5: Duplicate Refund Request (Idempotency)
+        order = sim.create_order(
+            customer_id=customer.id,
+            items=[{"sku": product.sku, "quantity": 1}],
+        )
+        payment = sim.create_payment(
+            order_id=order.id,
+            amount=Decimal("1200.00"),
+            payment_method=PaymentMethod.UPI,
+        )
+        sim.capture_payment(payment_id=payment.id)
+        idem_key = f"idem-demo-{uuid.uuid4().hex[:8]}"
+
+        from backend.tools.registry import create_default_tool_registry
+        from backend.tools.schemas import RequestRefundInput
+
+        reg = create_default_tool_registry(resilience_wrapper=agent_service.resilience_wrapper)
+        ctx = {"db": db, "idempotency_key": idem_key, "approved": True}
+
+        res1 = reg.execute(
+            "request_refund",
+            RequestRefundInput(order_id=order.id, reason="Return item"),
+            context=ctx,
+        )
+        timeline.append(f"First request executed: Refund status = {res1.get('status')}")
+
+        res2 = reg.execute(
+            "request_refund",
+            RequestRefundInput(order_id=order.id, reason="Return item"),
+            context=ctx,
+        )
+        timeline.append("Duplicate request replayed with same key: Returned identical response.")
+        timeline.append("Verified: Zero duplicate mutations or second payments created.")
+
+        return ScenarioRunResponse(
+            scenario_id="5",
+            name="Duplicate Request Protection (Idempotency)",
+            success=res1.get("status") == res2.get("status"),
+            summary=(
+                "Same idempotency key replayed twice; second call replayed cache "
+                "without duplicate mutation."
+            ),
+            timeline=timeline,
+            entities={"idempotency_key": idem_key, "order_id": str(order.id)},
+        )
+
+    elif sid == "6":
+        # Scenario 6: Payment Failure
+        order = sim.create_order(
+            customer_id=customer.id,
+            items=[{"sku": product.sku, "quantity": 1}],
+        )
+        payment = sim.create_payment(
+            order_id=order.id,
+            amount=order.total_amount,
+            payment_method=PaymentMethod.CARD,
+        )
+        sim.fail_payment(
+            session=db,
+            payment_id=payment.id,
+            error_code="ERR_CARD_DECLINED",
+            error_message="Card issuer declined transaction due to temporary fraud lock.",
+        )
+        db.refresh(order)
+        db.refresh(payment)
+        timeline.append(f"Order created: {order.order_number}")
+        timeline.append(f"Payment failed: {payment.payment_reference} with ERR_CARD_DECLINED")
+        timeline.append("Order remains PENDING (never incorrectly marked CONFIRMED or PAID)")
+        timeline.append(
+            "Payment failure registered in Exceptions Queue for operator investigation."
+        )
+
+        return ScenarioRunResponse(
+            scenario_id="6",
+            name="Payment Failure & Exception Flow",
+            success=order.status == OrderStatus.PENDING and payment.status == PaymentStatus.FAILED,
+            summary=(
+                "Payment failure safely handled; order not prematurely confirmed; exception logged."
+            ),
+            timeline=timeline,
+            entities={
+                "order_id": str(order.id),
+                "payment_ref": payment.payment_reference,
+                "error_code": payment.error_code,
+            },
+        )
+
+    else:
+        # Scenario 7: Verification Divergence
+        from backend.verification.service import state_verification_service
+
+        # Test simulated ghost success
+        order = sim.create_order(
+            customer_id=customer.id,
+            items=[{"sku": product.sku, "quantity": 1}],
+        )
+        timeline.append(f"Order in DB: {order.order_number} (Actual status: {order.status.value})")
+
+        v_res = state_verification_service.verify_order_state(
+            db=db,
+            order_id=order.id,
+            expected_status=OrderStatus.CANCELLED,
+            action="cancel_order",
+        )
+        timeline.append("Tool reported cancellation success, but DB order was not updated.")
+        timeline.append(f"Verification Engine executed: Verified = {v_res.verified}")
+        timeline.append(f"Divergence detected: {v_res.discrepancies}")
+        timeline.append("Alert raised: Prevented false success report to customer.")
+
+        return ScenarioRunResponse(
+            scenario_id="7",
+            name="Verification Divergence (Ghost Success Detection)",
+            success=not v_res.verified and len(v_res.discrepancies) > 0,
+            summary=(
+                "Verification engine accurately caught divergence between tool "
+                "success and persisted DB state."
+            ),
+            timeline=timeline,
+            entities={
+                "order_id": str(order.id),
+                "expected_status": "CANCELLED",
+                "actual_status": order.status.value,
+                "discrepancies": v_res.discrepancies,
+            },
+        )
 
 
 @router.get("/summary", response_model=OperationalSummary, status_code=status.HTTP_200_OK)

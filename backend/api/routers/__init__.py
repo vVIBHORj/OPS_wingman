@@ -14,6 +14,7 @@ from backend.api.routers.orders import router as orders_router
 from backend.api.routers.payments import router as payments_router
 from backend.api.routers.products import router as products_router
 from backend.api.routers.shipments import router as shipments_router
+from backend.api.routers.tickets import router as tickets_router
 
 __all__ = [
     "customers_router",
@@ -21,6 +22,7 @@ __all__ = [
     "orders_router",
     "payments_router",
     "shipments_router",
+    "tickets_router",
     "events_router",
     "agent_router",
     "knowledge_router",

@@ -24,7 +24,7 @@ def main() -> None:
     logger.info("Seeding knowledge base...")
     db = SessionLocal()
     try:
-        count = seed_default_knowledge(db)
+        count = seed_default_knowledge(db, auto_commit=True)
         logger.info("Successfully ingested/updated %d knowledge documents.", count)
     except Exception as e:
         logger.error("Failed to seed knowledge base: %s", e)
