@@ -11,11 +11,8 @@ desktop.ini
 
 # Environment and Secrets (CRITICAL: NEVER COMMIT SECRETS)
 .env
-.env.local
-.env.*.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env*
+!.env.example
 *.pem
 *.key
 *.cert
@@ -119,6 +116,9 @@ OpsWingman_Project_Master_Blueprint.docx
 blueprint*
 *.dump
 *.raw
+*.sql.gz
+dump*.sql
+backup*.sql
 start.txt
 prompt*.txt
 *_dump.txt
@@ -127,6 +127,8 @@ scratch/
 insights/
 *.tar
 *.tar.gz
+*.tgz
 *.zip
+*.7z
 *.bak
 

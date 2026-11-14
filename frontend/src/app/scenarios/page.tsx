@@ -1,20 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import {
   PlayCircle,
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  ShieldAlert,
   Clock,
-  RotateCcw,
-  Ban,
-  Search,
+  ExternalLink,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -156,33 +149,30 @@ export default function ScenariosPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="border-b border-slate-800 pb-5">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600 text-white shadow">
-            <PlayCircle className="h-5 w-5" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <PlayCircle className="h-5 w-5 text-zinc-400" />
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Operations Scenarios</h1>
+            <span className="text-xs font-mono text-zinc-500 tabular-nums">({SCENARIOS.length})</span>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              Operations Scenario Runner
-            </h1>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Live end-to-end demonstrations of deterministic policies, state verification, idempotency, and supervisor gating.
-            </p>
-          </div>
+          <p className="text-xs text-zinc-400 mt-1">
+            End-to-end verification tests demonstrating deterministic policies, idempotency guards, and state verification.
+          </p>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-4 text-xs text-rose-300 flex items-center gap-2">
+        <div className="rounded-xl border border-rose-500/20 bg-rose-950/10 p-4 text-xs text-rose-300 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
           <span>{error}</span>
         </div>
       )}
 
       {/* Scenarios Grid */}
-      <div className="grid grid-cols-1 gap-5">
+      <div className="space-y-4">
         {SCENARIOS.map((sc) => {
           const isRunning = runningId === sc.id;
           const result = results[sc.id];
@@ -190,49 +180,49 @@ export default function ScenariosPage() {
           return (
             <div
               key={sc.id}
-              className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-4 hover:border-slate-700 transition-colors"
+              className="rounded-xl border border-white/[0.08] bg-[#0c0d14] p-5 space-y-4 hover:border-white/[0.14] transition-colors"
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-400">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="rounded border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[10px] font-mono text-zinc-400">
                       Scenario #{sc.id}
                     </span>
-                    <span className="rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                    <span className="rounded border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[10px] font-mono text-zinc-300">
                       {sc.category}
                     </span>
                   </div>
-                  <h3 className="text-base font-bold text-white mt-1">{sc.name}</h3>
+                  <h3 className="text-sm font-semibold text-zinc-100">{sc.name}</h3>
                 </div>
 
                 <button
                   onClick={() => handleRunScenario(sc.id)}
                   disabled={isRunning}
-                  className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50 transition-colors shrink-0"
+                  className="inline-flex items-center gap-2 rounded-md border border-white/[0.12] bg-white/[0.06] px-3.5 py-1.5 text-xs font-medium text-zinc-200 hover:bg-white/[0.12] hover:text-white disabled:opacity-40 transition-colors shrink-0"
                 >
                   {isRunning ? (
                     <>
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />
                       <span>Executing Workflow...</span>
                     </>
                   ) : (
                     <>
-                      <PlayCircle className="h-4 w-4" />
-                      <span>Run Scenario</span>
+                      <PlayCircle className="h-3.5 w-3.5 text-zinc-400" />
+                      <span>Execute Scenario</span>
                     </>
                   )}
                 </button>
               </div>
 
-              <p className="text-xs text-slate-300 leading-relaxed">{sc.description}</p>
+              <p className="text-xs text-zinc-400 leading-relaxed">{sc.description}</p>
 
               {/* Tested Mechanisms Pills */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Verifies:</span>
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">Verifies:</span>
                 {sc.testedMechanisms.map((mech) => (
                   <span
                     key={mech}
-                    className="rounded-md border border-slate-800 bg-slate-950 px-2 py-0.5 text-[10px] text-slate-400 font-mono"
+                    className="rounded border border-white/[0.06] bg-[#090a0f] px-2 py-0.5 text-[10px] text-zinc-400 font-mono"
                   >
                     {mech}
                   </span>
@@ -241,8 +231,8 @@ export default function ScenariosPage() {
 
               {/* Run Result Output View */}
               {result && (
-                <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 p-4 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                <div className="mt-3 rounded-lg border border-white/[0.08] bg-[#090a0f] p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
                     <div className="flex items-center gap-2">
                       {result.success ? (
                         <CheckCircle2 className="h-4 w-4 text-emerald-400" />
@@ -250,30 +240,30 @@ export default function ScenariosPage() {
                         <AlertTriangle className="h-4 w-4 text-rose-400" />
                       )}
                       <span
-                        className={`text-xs font-bold ${
-                          result.success ? "text-emerald-400" : "text-rose-400"
+                        className={`text-xs font-semibold ${
+                          result.success ? "text-emerald-300" : "text-rose-300"
                         }`}
                       >
                         {result.success
-                          ? "Scenario Completed & Invariants Verified"
-                          : "Execution Invariant Divergence"}
+                          ? "Execution Verified Under Policy Constraints"
+                          : "State Invariant Divergence Detected"}
                       </span>
                     </div>
                   </div>
 
-                  <p className="text-xs text-slate-300 font-medium">{result.summary}</p>
+                  <p className="text-xs text-zinc-300 font-mono">{result.summary}</p>
 
                   {/* Step Timeline */}
                   <div className="space-y-1.5 pt-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      Execution Step Timeline:
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 font-mono">
+                      Step Execution Trace:
                     </div>
                     {result.timeline.map((step, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 text-xs font-mono text-slate-300"
+                        className="flex items-start gap-2 text-[11px] font-mono text-zinc-300 leading-relaxed"
                       >
-                        <span className="text-sky-400">[{idx + 1}]</span>
+                        <span className="text-zinc-500 shrink-0">[{idx + 1}]</span>
                         <span>{step}</span>
                       </div>
                     ))}
@@ -281,13 +271,13 @@ export default function ScenariosPage() {
 
                   {/* Entity State Link */}
                   {result.entities && Object.keys(result.entities).length > 0 && (
-                    <div className="pt-2 border-t border-slate-800/60 flex flex-wrap gap-2 text-[11px] font-mono">
+                    <div className="pt-2 border-t border-white/[0.06] flex flex-wrap gap-2 text-[10px] font-mono">
                       {Object.entries(result.entities).map(([k, v]) => (
                         <span
                           key={k}
-                          className="rounded bg-slate-900 border border-slate-800 px-2 py-0.5 text-slate-400"
+                          className="rounded border border-white/[0.06] bg-[#0c0d14] px-2 py-0.5 text-zinc-400"
                         >
-                          <strong className="text-slate-300">{k}:</strong> {String(v)}
+                          <span className="text-zinc-500">{k}:</span> {String(v)}
                         </span>
                       ))}
                     </div>
@@ -301,4 +291,3 @@ export default function ScenariosPage() {
     </div>
   );
 }
-

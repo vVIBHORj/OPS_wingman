@@ -2,6 +2,18 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import {
+  ShieldCheck,
+  AlertTriangle,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  BookOpen,
+  ArrowRight,
+  ChevronRight,
+} from "lucide-react";
+import { fetchJson, API_BASE_URL } from "@/lib/api";
 
 interface Citation {
   document_id: string;
@@ -39,6 +51,29 @@ interface ApprovalRecord {
   decided_at: string | null;
 }
 
+const statusConfig: Record<string, { label: string; dot: string; badge: string }> = {
+  PENDING: {
+    label: "Pending Review",
+    dot: "bg-amber-400",
+    badge: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+  },
+  APPROVED: {
+    label: "Approved",
+    dot: "bg-emerald-400",
+    badge: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  },
+  REJECTED: {
+    label: "Rejected",
+    dot: "bg-rose-400",
+    badge: "border-rose-500/20 bg-rose-500/10 text-rose-300",
+  },
+  EXPIRED: {
+    label: "Expired",
+    dot: "bg-zinc-400",
+    badge: "border-zinc-700 bg-zinc-800 text-zinc-300",
+  },
+};
+
 export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -47,27 +82,21 @@ export default function ApprovalsPage() {
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
   const fetchApprovals = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const url = statusFilter
-        ? `${API_URL}/approvals?status=${statusFilter}`
-        : `${API_URL}/approvals`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch approvals: ${res.statusText}`);
-      }
-      const data = await res.json();
-      setApprovals(data);
+      const endpoint = statusFilter
+        ? `/approvals?status=${statusFilter}`
+        : `/approvals`;
+      const data = await fetchJson<ApprovalRecord[]>(endpoint);
+      setApprovals(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.message || "An error occurred fetching approvals");
     } finally {
       setLoading(false);
     }
-  }, [API_URL, statusFilter]);
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchApprovals();
@@ -76,7 +105,7 @@ export default function ApprovalsPage() {
   const handleApprove = async (id: string) => {
     try {
       setSubmittingId(id);
-      const res = await fetch(`${API_URL}/approvals/${id}/approve`, {
+      const res = await fetch(`${API_BASE_URL}/approvals/${id}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approver_identity: "supervisor@opswingman.local" }),
@@ -97,7 +126,7 @@ export default function ApprovalsPage() {
     const reason = rejectionReasons[id] || "Rejected by supervisor";
     try {
       setSubmittingId(id);
-      const res = await fetch(`${API_URL}/approvals/${id}/reject`, {
+      const res = await fetch(`${API_BASE_URL}/approvals/${id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -118,192 +147,195 @@ export default function ApprovalsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div>
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/"
-                className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
-              >
-                &larr; Back to Home
-              </Link>
-              <span className="text-slate-600">•</span>
-              <span className="text-xs text-slate-400 font-mono">Phase 3: D-12 Human Approval Queue</span>
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight mt-1 text-white">
-              Operations Approval Queue
-            </h1>
-            <p className="text-sm text-slate-400 mt-1">
-              Gated Human-in-the-Loop authorization for HIGH-risk state modifications.
-            </p>
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-zinc-400" />
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Governance &amp; Approvals</h1>
+            <span className="text-xs font-mono text-zinc-500 tabular-nums">({approvals.length})</span>
           </div>
+          <p className="text-xs text-zinc-400 mt-1">
+            Gated human-in-the-loop authorization queue for high-risk operations and policy overrides.
+          </p>
+        </div>
 
-          {/* Filter Pills */}
-          <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
-            {["PENDING", "APPROVED", "REJECTED", ""].map((f) => (
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1.5 self-start sm:self-auto overflow-x-auto">
+          {["PENDING", "APPROVED", "REJECTED", ""].map((f) => {
+            const isSelected = statusFilter === f;
+            return (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                  statusFilter === f
-                    ? "bg-sky-500 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors shrink-0 ${
+                  isSelected
+                    ? "bg-white/[0.12] text-zinc-100 border border-white/[0.16]"
+                    : "border border-white/[0.06] bg-[#0c0d14] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
                 }`}
               >
                 {f === "" ? "ALL" : f}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Content Section */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center p-16 space-y-3">
-            <div className="w-8 h-8 border-4 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-slate-400">Loading approval requests...</p>
+      {/* Main Content */}
+      {loading ? (
+        <div className="flex h-72 flex-col items-center justify-center gap-3 text-zinc-400">
+          <RefreshCw className="h-6 w-6 animate-spin text-zinc-500" />
+          <p className="text-xs font-mono">Loading approval ledger...</p>
+        </div>
+      ) : error ? (
+        <div className="p-4 rounded-xl border border-rose-500/20 bg-rose-950/10 text-xs text-rose-300 space-y-2">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4 text-rose-400" />
+            <span>Failed to query approval queue</span>
           </div>
-        ) : error ? (
-          <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-xl text-red-300 text-sm">
-            <p className="font-semibold">Error loading approvals</p>
-            <p className="text-xs mt-1 text-red-400">{error}</p>
-            <button
-              onClick={fetchApprovals}
-              className="mt-3 px-3 py-1.5 bg-red-800/40 hover:bg-red-800/60 text-xs rounded-md border border-red-700"
-            >
-              Retry
-            </button>
-          </div>
-        ) : approvals.length === 0 ? (
-          <div className="text-center p-16 border border-dashed border-slate-800 rounded-2xl bg-slate-900/30">
-            <p className="text-slate-400 text-sm">No {statusFilter || "matching"} approval requests found.</p>
-            <p className="text-xs text-slate-500 mt-1">
-              When an OpsAgent encounters a HIGH-risk policy gate, it will appear here for review.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {approvals.map((item) => (
+          <p className="text-zinc-400 font-mono">{error}</p>
+          <button
+            onClick={fetchApprovals}
+            className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20 transition-colors"
+          >
+            Retry Request
+          </button>
+        </div>
+      ) : approvals.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-white/[0.08] bg-[#0c0d14]/40 p-12 text-center">
+          <ShieldCheck className="mx-auto h-8 w-8 text-zinc-600 mb-2" />
+          <p className="text-xs font-medium text-zinc-300">No {statusFilter ? statusFilter.toLowerCase() : ""} approval requests in queue.</p>
+          <p className="text-[11px] text-zinc-500 mt-1 max-w-sm mx-auto">
+            High-risk operations or policy threshold violations will automatically be held here awaiting supervisor sign-off.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {approvals.map((item) => {
+            const statusStyle = statusConfig[item.status] || {
+              label: item.status,
+              dot: "bg-zinc-400",
+              badge: "border-zinc-700 bg-zinc-800 text-zinc-300",
+            };
+
+            const isHighRisk = item.risk_level === "HIGH" || item.risk_level === "CRITICAL";
+
+            return (
               <div
                 key={item.id}
-                className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 shadow-lg space-y-4 transition-all"
+                className="rounded-xl border border-white/[0.08] bg-[#0c0d14] p-5 space-y-4 hover:border-white/[0.14] transition-colors"
               >
-                {/* Top Row: Action & Status Badge */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-bold text-sky-400">
+                {/* Header row */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="font-mono text-xs font-semibold text-zinc-100">
                       {item.action_name}
                     </span>
                     {item.target_entity && (
-                      <span className="px-2 py-0.5 text-xs bg-slate-800 rounded text-slate-300 font-mono">
+                      <span className="rounded border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[11px] font-mono text-zinc-400">
                         Target: {item.target_entity}
                       </span>
                     )}
                     <span
-                      className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
-                        item.risk_level === "HIGH"
-                          ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                          : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                      className={`inline-flex items-center rounded border px-2 py-0.5 text-[10px] font-mono uppercase ${
+                        isHighRisk
+                          ? "border-rose-500/25 bg-rose-500/10 text-rose-300"
+                          : "border-amber-500/25 bg-amber-500/10 text-amber-300"
                       }`}
                     >
                       {item.risk_level} Risk
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs px-3 py-1 rounded-full font-semibold uppercase ${
-                        item.status === "PENDING"
-                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                          : item.status === "APPROVED"
-                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                          : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </div>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${statusStyle.badge}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dot}`} />
+                    {statusStyle.label}
+                  </span>
                 </div>
 
-                {/* Details Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300">
+                {/* 2-Column Details: Context & Policy */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                   <div>
-                    <span className="text-slate-500 uppercase tracking-wider block font-semibold mb-1">
-                      Reason / Business Context
-                    </span>
-                    <p className="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 font-mono">
+                    <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                      Operational Context
+                    </div>
+                    <div className="rounded-lg border border-white/[0.06] bg-[#090a0f] p-3 text-zinc-300 font-mono text-xs leading-relaxed">
                       {item.reason}
-                    </p>
+                    </div>
                   </div>
 
                   <div>
-                    <span className="text-slate-500 uppercase tracking-wider block font-semibold mb-1">
-                      Policy Evaluation Decision
-                    </span>
-                    <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 space-y-1">
-                      <p>
-                        <strong className="text-slate-400">Policy:</strong>{" "}
-                        {item.policy_version ? `${item.policy_decision?.policy_id || "POL"} (v${item.policy_version})` : "N/A"}
-                      </p>
-                      <p>
-                        <strong className="text-slate-400">Rule Decision:</strong>{" "}
-                        {item.policy_decision?.decision || "Manual verification required"}
-                      </p>
-                      {item.policy_decision?.matched_rules && (
-                        <p>
-                          <strong className="text-slate-400">Matched Rules:</strong>{" "}
-                          {item.policy_decision.matched_rules.join(", ")}
-                        </p>
+                    <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                      Policy Verification
+                    </div>
+                    <div className="rounded-lg border border-white/[0.06] bg-[#090a0f] p-3 space-y-1.5 text-zinc-300 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Framework:</span>
+                        <span className="font-mono text-zinc-200">
+                          {item.policy_version ? `${item.policy_decision?.policy_id || "POL-GOV"} (v${item.policy_version})` : "Standard Control"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Rule Evaluation:</span>
+                        <span className="text-zinc-200">
+                          {item.policy_decision?.decision || "Manual verification required"}
+                        </span>
+                      </div>
+                      {item.policy_decision?.matched_rules && item.policy_decision.matched_rules.length > 0 && (
+                        <div className="pt-1 border-t border-white/[0.06] text-[11px] text-zinc-300">
+                          <span className="text-zinc-400">Matched Constraints:</span>{" "}
+                          <span className="font-mono text-zinc-200">{item.policy_decision.matched_rules.join(", ")}</span>
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Parameters & Metadata */}
-                <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 border-t border-slate-800/40">
-                  <span>
-                    <strong>Workflow ID:</strong> <code className="text-sky-300">{item.workflow_id}</code>
-                  </span>
-                  <span>
-                    <strong>Requested At:</strong> {new Date(item.requested_at).toLocaleString()}
-                  </span>
+                {/* Metadata strip */}
+                <div className="text-[11px] text-zinc-400 font-mono flex flex-wrap items-center gap-x-5 gap-y-1.5 pt-2 border-t border-white/[0.06]">
+                  <div>
+                    <span className="text-zinc-400">Workflow:</span> <span className="text-zinc-300 font-medium">{item.workflow_id}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400">Requested:</span> <span className="text-zinc-300 font-medium">{new Date(item.requested_at).toLocaleString("en-IN")}</span>
+                  </div>
                   {item.approver_identity && (
-                    <span>
-                      <strong>Decided By:</strong> {item.approver_identity}
-                    </span>
+                    <div>
+                      <span className="text-zinc-400">Decided by:</span> <span className="text-zinc-200">{item.approver_identity}</span>
+                    </div>
                   )}
                   {item.rejection_reason && (
-                    <span className="text-rose-400">
-                      <strong>Rejection Reason:</strong> {item.rejection_reason}
-                    </span>
+                    <div className="text-rose-400">
+                      <span>Reason:</span> {item.rejection_reason}
+                    </div>
                   )}
                 </div>
 
-                {/* Citations Provenance (D-10) */}
+                {/* Retrieved Knowledge Citations */}
                 {item.citations && item.citations.length > 0 && (
                   <div className="pt-2">
-                    <span className="text-xs text-slate-500 uppercase tracking-wider block font-semibold mb-1">
-                      Retrieved Knowledge Citations (D-10 RAG Provenance)
-                    </span>
-                    <div className="space-y-1.5">
+                    <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5 text-zinc-400" />
+                      Retrieved Knowledge Citations (RAG Provenance)
+                    </div>
+                    <div className="space-y-2">
                       {item.citations.map((c, idx) => (
                         <div
                           key={idx}
-                          className="text-xs bg-slate-950/40 border border-slate-800/60 p-2.5 rounded-lg text-slate-400"
+                          className="rounded-lg border border-white/[0.06] bg-[#090a0f] p-3 text-xs text-zinc-300"
                         >
-                          <div className="font-semibold text-slate-300 flex items-center justify-between">
-                            <span>
+                          <div className="font-medium text-zinc-200 flex items-center justify-between mb-1">
+                            <span className="font-mono text-[11px]">
                               {c.document_id} — {c.title} (v{c.version})
                             </span>
                             {c.similarity_score !== undefined && (
-                              <span className="text-[10px] text-sky-400 font-mono">
+                              <span className="text-[10px] text-zinc-400 font-mono tabular-nums">
                                 Match: {(c.similarity_score * 100).toFixed(1)}%
                               </span>
                             )}
                           </div>
-                          <p className="mt-1 text-slate-300 text-[11px] line-clamp-2 italic">
+                          <p className="text-[11px] text-zinc-400 leading-relaxed italic">
                             &quot;{c.text}&quot;
                           </p>
                         </div>
@@ -314,11 +346,11 @@ export default function ApprovalsPage() {
 
                 {/* Action Controls for PENDING requests */}
                 {item.status === "PENDING" && (
-                  <div className="pt-4 border-t border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                  <div className="pt-3 border-t border-white/[0.06] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                     <div className="flex-1">
                       <input
                         type="text"
-                        placeholder="Rejection reason (required if rejecting)..."
+                        placeholder="Rejection justification (required if declining)..."
                         value={rejectionReasons[item.id] || ""}
                         onChange={(e) =>
                           setRejectionReasons({
@@ -326,7 +358,7 @@ export default function ApprovalsPage() {
                             [item.id]: e.target.value,
                           })
                         }
-                        className="w-full text-xs px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                        className="w-full text-xs px-3 py-1.5 bg-[#090a0f] border border-white/[0.08] rounded-md text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
                       />
                     </div>
 
@@ -334,25 +366,27 @@ export default function ApprovalsPage() {
                       <button
                         onClick={() => handleReject(item.id)}
                         disabled={submittingId === item.id}
-                        className="px-4 py-2 text-xs font-semibold bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-lg transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-3.5 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/20 transition-colors disabled:opacity-50"
                       >
-                        {submittingId === item.id ? "Processing..." : "Reject Action"}
+                        <XCircle className="h-3.5 w-3.5" />
+                        <span>{submittingId === item.id ? "Processing..." : "Reject"}</span>
                       </button>
                       <button
                         onClick={() => handleApprove(item.id)}
                         disabled={submittingId === item.id}
-                        className="px-5 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md rounded-lg transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/20 px-4 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-50"
                       >
-                        {submittingId === item.id ? "Processing..." : "Approve & Execute"}
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>{submittingId === item.id ? "Authorizing..." : "Approve & Execute"}</span>
                       </button>
                     </div>
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

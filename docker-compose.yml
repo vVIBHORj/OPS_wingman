@@ -108,6 +108,8 @@ services:
     env_file:
       - .env
     environment:
+      AUTO_MIGRATE: "false"
+      WAIT_FOR_MIGRATION: "false"
       POSTGRES_HOST: postgres
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/opswingman
       DATABASE_SYNC_URL: postgresql://postgres:postgres@postgres:5432/opswingman
@@ -136,6 +138,7 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - /app/.next
 
 volumes:
   postgres_data:

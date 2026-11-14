@@ -10,13 +10,23 @@ export async function fetchJson<T>(
   options?: RequestInit
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+      },
+    });
+  } catch (err: any) {
+    if (err instanceof TypeError && (err.message === "Failed to fetch" || err.message.includes("NetworkError"))) {
+      throw new Error(
+        `Unable to connect to backend at ${API_BASE_URL}. Ensure backend service is reachable on port 8000 and CORS permits this origin.`
+      );
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     let errorDetail = res.statusText;
@@ -31,4 +41,3 @@ export async function fetchJson<T>(
 
   return res.json() as Promise<T>;
 }
-

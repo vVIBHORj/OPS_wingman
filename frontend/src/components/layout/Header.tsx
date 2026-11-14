@@ -2,77 +2,116 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Bell,
   Search,
   Sparkles,
-  ShieldCheck,
-  CheckCircle2,
+  Menu,
 } from "lucide-react";
 
-export default function Header() {
+interface HeaderProps {
+  onOpenMobile: () => void;
+}
+
+const PAGE_NAMES: Record<string, string> = {
+  "/": "Command Center",
+  "/agent": "AI Operations Agent",
+  "/orders": "Orders Ledger",
+  "/customers": "Customer Directory",
+  "/products": "Product Catalog",
+  "/payments": "Payment Ledger",
+  "/shipments": "Logistics & Fulfillment",
+  "/tickets": "Support Ticket Queue",
+  "/approvals": "Gated Approval Queue",
+  "/exceptions": "Operational Exceptions",
+  "/audit": "Audit & Compliance Trail",
+  "/scenarios": "Scenario Runner",
+};
+
+export default function Header({ onOpenMobile }: HeaderProps) {
+  const pathname = usePathname();
+
+  const getPageTitle = () => {
+    if (PAGE_NAMES[pathname]) return PAGE_NAMES[pathname];
+    if (pathname.startsWith("/orders/")) return "Order Details";
+    if (pathname.startsWith("/customers/")) return "Customer Profile";
+    return "Operations";
+  };
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-800 bg-slate-950/80 px-6 backdrop-blur-md">
-      {/* Search Bar / Fast Navigation */}
-      <div className="flex items-center gap-3 w-72 md:w-96">
+    <header className="sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b border-white/[0.07] bg-[#08090d]/80 px-4 sm:px-6 backdrop-blur-md">
+      {/* Left: Mobile hamburger & Contextual Breadcrumb */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onOpenMobile}
+          className="flex md:hidden h-8 w-8 items-center justify-center rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-zinc-400 hidden sm:inline">Operations</span>
+          <span className="text-zinc-600 hidden sm:inline">/</span>
+          <span className="font-medium text-zinc-200">{getPageTitle()}</span>
+        </div>
+      </div>
+
+      {/* Middle: Minimalist Command Search Bar */}
+      <div className="hidden lg:flex items-center max-w-sm w-full mx-4">
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
           <input
             type="text"
-            placeholder="Search orders, tracking, SKUs, customers..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-9 pr-10 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            placeholder="Search orders, SKUs, customers, shipments..."
+            className="w-full rounded-md border border-white/[0.07] bg-white/[0.03] pl-8 pr-12 py-1.5 text-xs text-zinc-200 placeholder-zinc-400 transition-colors focus:border-zinc-500 focus:bg-white/[0.05] focus:outline-none"
           />
-          <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400 font-mono">
+          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[9px] text-zinc-400 font-mono">
             ⌘K
           </kbd>
         </div>
       </div>
 
-      {/* Right Action Bar */}
-      <div className="flex items-center gap-3">
-        {/* Environment Badge */}
-        <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          Live Ops Runtime (INR)
+      {/* Right: Quick actions and status */}
+      <div className="flex items-center gap-2.5">
+        {/* Runtime Status Pill */}
+        <div className="hidden xl:inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.02] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+          <span>INR Runtime</span>
         </div>
 
-        {/* Quick Scenario Runner link */}
+        {/* Demo Scenarios Shortcut */}
         <Link
           href="/scenarios"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-colors"
         >
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>Demo Scenarios</span>
+          <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+          <span className="hidden sm:inline">Scenarios</span>
         </Link>
 
-        {/* Exceptions Notification */}
+        {/* Exceptions Notification Link */}
         <Link
           href="/exceptions"
-          className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Operational Exceptions"
+          className="relative flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.07] bg-white/[0.02] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05] transition-colors"
+          title="Operational Exceptions Queue"
+          aria-label="View Operational Exceptions"
         >
-          <Bell className="h-4 w-4" />
-          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
-            !
-          </span>
+          <Bell className="h-3.5 w-3.5" />
+          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-amber-400" />
         </Link>
 
-        {/* User / Operator Profile */}
-        <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 text-xs font-bold text-white shadow">
+        {/* Operator Profile */}
+        <div className="flex items-center gap-2 pl-2 border-l border-white/[0.07]">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 border border-white/10 text-[11px] font-medium text-zinc-200">
             OP
           </div>
-          <div className="hidden lg:block text-left">
-            <div className="text-xs font-semibold text-slate-200">
-              Operations Lead
-            </div>
-            <div className="text-[10px] text-slate-400">
-              Supervisor (Full Auth)
-            </div>
+          <div className="hidden 2xl:block text-left text-xs leading-none">
+            <div className="font-medium text-zinc-200">Ops Supervisor</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5">Primary Session</div>
           </div>
         </div>
       </div>
     </header>
   );
 }
-

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  X,
 } from "lucide-react";
 
 interface NavItem {
@@ -26,149 +27,219 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: string;
-  badgeVariant?: "default" | "warning" | "danger" | "success";
+  badgeTone?: "info" | "warning" | "danger";
 }
 
-const navItems: NavItem[] = [
-  { name: "Command Center", href: "/", icon: LayoutDashboard },
-  { name: "AI Ops Agent", href: "/agent", icon: Bot, badge: "AI" },
-  { name: "Orders", href: "/orders", icon: ShoppingCart },
-  { name: "Customers", href: "/customers", icon: Users },
-  { name: "Catalog", href: "/products", icon: Package },
-  { name: "Payments", href: "/payments", icon: CreditCard },
-  { name: "Logistics", href: "/shipments", icon: Truck },
-  { name: "Support Tickets", href: "/tickets", icon: LifeBuoy },
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
   {
-    name: "Approval Queue",
-    href: "/approvals",
-    icon: ShieldAlert,
-    badgeVariant: "warning",
+    title: "Operations",
+    items: [
+      { name: "Command Center", href: "/", icon: LayoutDashboard },
+      { name: "AI Ops Agent", href: "/agent", icon: Bot, badge: "AI", badgeTone: "info" },
+      { name: "Scenario Runner", href: "/scenarios", icon: PlayCircle },
+    ],
   },
   {
-    name: "Exceptions Queue",
-    href: "/exceptions",
-    icon: AlertTriangle,
-    badgeVariant: "danger",
+    title: "Commerce & Fulfillment",
+    items: [
+      { name: "Orders", href: "/orders", icon: ShoppingCart },
+      { name: "Customers", href: "/customers", icon: Users },
+      { name: "Catalog", href: "/products", icon: Package },
+      { name: "Payments", href: "/payments", icon: CreditCard },
+      { name: "Logistics", href: "/shipments", icon: Truck },
+    ],
   },
-  { name: "Audit Explorer", href: "/audit", icon: History },
   {
-    name: "Scenario Runner",
-    href: "/scenarios",
-    icon: PlayCircle,
-    badgeVariant: "success",
+    title: "Governance & Support",
+    items: [
+      { name: "Support Tickets", href: "/tickets", icon: LifeBuoy },
+      { name: "Approval Queue", href: "/approvals", icon: ShieldAlert, badge: "Gated", badgeTone: "warning" },
+      { name: "Exceptions Queue", href: "/exceptions", icon: AlertTriangle, badge: "Alert", badgeTone: "danger" },
+      { name: "Audit Explorer", href: "/audit", icon: History },
+    ],
   },
 ];
 
-export default function Sidebar() {
-  const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
+}
 
-  return (
-    <aside
-      className={`fixed top-0 bottom-0 left-0 z-40 flex flex-col border-r border-slate-800 bg-slate-950/95 backdrop-blur-md transition-all duration-300 ${
-        collapsed ? "w-20" : "w-64"
-      }`}
-    >
-      {/* Brand Header */}
-      <div className="flex h-16 items-center justify-between border-b border-slate-800/80 px-4">
-        {!collapsed ? (
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 shadow-md shadow-sky-500/20">
-              <ShieldCheck className="h-5 w-5 text-white" />
-            </div>
-            <div>
+export default function Sidebar({
+  collapsed,
+  onToggle,
+  mobileOpen,
+  onCloseMobile,
+}: SidebarProps) {
+  const pathname = usePathname();
+
+  const isLinkActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    return pathname.startsWith(href);
+  };
+
+  const sidebarContent = (
+    <div className="flex h-full flex-col justify-between">
+      {/* Brand & Collapse Header */}
+      <div>
+        <div className="flex h-14 items-center justify-between px-3.5 border-b border-white/[0.07]">
+          {!collapsed ? (
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 border border-white/10 text-zinc-100 shadow-sm group-hover:border-zinc-500 transition-colors">
+                <ShieldCheck className="h-4 w-4 text-zinc-200" />
+              </div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold tracking-tight text-white text-base">
-                  OPSwingman
+                <span className="font-semibold text-sm tracking-tight text-zinc-100">
+                  OPS<span className="text-zinc-400 font-normal">wingman</span>
                 </span>
-                <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-sky-400">
-                  v2.0
+                <span className="rounded bg-white/[0.06] border border-white/[0.08] px-1 py-0.2 text-[10px] font-mono text-zinc-400">
+                  v2
                 </span>
               </div>
-              <p className="text-[11px] font-medium text-slate-400">
-                Operations Engine
-              </p>
-            </div>
-          </Link>
-        ) : (
-          <Link href="/" className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600">
-            <ShieldCheck className="h-5 w-5 text-white" />
-          </Link>
-        )}
+            </Link>
+          ) : (
+            <Link href="/" className="mx-auto flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 border border-white/10">
+              <ShieldCheck className="h-4 w-4 text-zinc-200" />
+            </Link>
+          )}
 
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
-      </div>
+          {/* Desktop Toggle Button */}
+          <button
+            onClick={onToggle}
+            className="hidden md:flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.05] transition-colors"
+            title={collapsed ? "Expand sidebar (⌘B)" : "Collapse sidebar (⌘B)"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+          </button>
 
-      {/* Navigation List */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4 scrollbar-thin">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+          {/* Mobile Close Button */}
+          <button
+            onClick={onCloseMobile}
+            className="flex md:hidden h-7 w-7 items-center justify-center rounded text-zinc-400 hover:text-white"
+            aria-label="Close sidebar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                isActive
-                  ? "bg-sky-500/10 text-sky-400 font-semibold border-l-2 border-sky-400"
-                  : "text-slate-400 hover:bg-slate-900/80 hover:text-slate-100"
-              }`}
-              title={collapsed ? item.name : undefined}
-            >
-              <Icon
-                className={`h-5 w-5 shrink-0 transition-colors ${
-                  isActive ? "text-sky-400" : "text-slate-400 group-hover:text-slate-200"
-                }`}
-              />
+        {/* Navigation Sections */}
+        <nav className="space-y-5 px-2.5 py-4 overflow-y-auto max-h-[calc(100vh-125px)]">
+          {navSections.map((section) => (
+            <div key={section.title} className="space-y-1">
               {!collapsed && (
-                <div className="flex flex-1 items-center justify-between">
-                  <span className="truncate">{item.name}</span>
-                  {item.badge && (
-                    <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-sky-400">
-                      {item.badge}
-                    </span>
-                  )}
+                <div className="px-2 pb-1 text-[10px] font-semibold tracking-wider text-zinc-400 uppercase">
+                  {section.title}
                 </div>
               )}
-            </Link>
-          );
-        })}
-      </nav>
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isLinkActive(item.href);
 
-      {/* Operational Status Footer */}
-      {!collapsed ? (
-        <div className="border-t border-slate-800/80 p-3 bg-slate-900/40">
-          <div className="rounded-lg border border-slate-800 bg-slate-950 p-2.5">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-medium text-slate-400">
-                Runtime Guard
-              </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={onCloseMobile}
+                      title={collapsed ? item.name : undefined}
+                      className={`group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        active
+                          ? "bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                          : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
+                      }`}
+                    >
+                      <Icon
+                        className={`h-4 w-4 shrink-0 transition-colors ${
+                          active ? "text-white" : "text-zinc-400 group-hover:text-zinc-300"
+                        }`}
+                      />
+                      {!collapsed && (
+                        <div className="flex flex-1 items-center justify-between overflow-hidden">
+                          <span className="truncate">{item.name}</span>
+                          {item.badge && (
+                            <span
+                              className={`rounded px-1.5 py-0.2 text-[9px] font-mono tracking-wide uppercase border ${
+                                item.badgeTone === "warning"
+                                  ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                                  : item.badgeTone === "danger"
+                                  ? "bg-rose-500/10 text-rose-300 border-rose-500/20"
+                                  : "bg-indigo-500/10 text-indigo-300 border-indigo-500/20"
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      {/* Footer System Status */}
+      <div className="p-3 border-t border-white/[0.07]">
+        {!collapsed ? (
+          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-zinc-400 font-medium">Deterministic Engine</span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                 ACTIVE
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 leading-tight">
-              Deterministic policy enforcement &amp; transactional idempotency active.
+            <p className="mt-1 text-[10px] text-zinc-400 leading-tight">
+              State verification &amp; policy boundaries enforced
             </p>
           </div>
-        </div>
-      ) : (
-        <div className="border-t border-slate-800/80 p-3 text-center">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        </div>
+        ) : (
+          <div className="flex justify-center" title="Deterministic Engine Active">
+            <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile Backdrop */}
+      {mobileOpen && (
+        <div
+          onClick={onCloseMobile}
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm md:hidden transition-opacity"
+          aria-hidden="true"
+        />
       )}
-    </aside>
+
+      {/* Desktop Persistent Sidebar */}
+      <aside
+        className={`fixed top-0 bottom-0 left-0 z-40 hidden md:flex flex-col border-r border-white/[0.07] bg-[#0b0c12] transition-all duration-200 ease-out ${
+          collapsed ? "w-20" : "w-64"
+        }`}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Slide-over Drawer */}
+      <aside
+        className={`fixed top-0 bottom-0 left-0 z-50 flex w-72 flex-col border-r border-white/[0.07] bg-[#0b0c12] md:hidden transition-transform duration-200 ease-out ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
-
